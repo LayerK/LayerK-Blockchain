@@ -550,12 +550,3 @@ All errors returned by the API follow the format below:
 
 ```
 
----
-
-### License
-
-This API is licensed under Apache 2.0. For more details, visit [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0.html).
-
----
-
-This concludes the API documentation for LayerK Blockchain API. For more information, contact via email at `you@your-company.com`.
