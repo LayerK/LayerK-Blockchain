@@ -107,7 +107,7 @@ LayerK offers a developer-friendly environment with tools such as SDKs, APIs, an
 Deploying smart contracts involves:
 - Writing in Solidity.
 - Compiling and testing.
-- Deploying to the LayerK network using familiar Ethereum tools.
+- Deploying to the LayerK network using familiar Ethereum tools. (also use related test bridges)
 
 ### 8. Security Features
 LayerK prioritizes security through:
