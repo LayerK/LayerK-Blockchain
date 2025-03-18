@@ -37,7 +37,7 @@ LayerK is designed to offer high throughput, low latency, and reduced gas fees, 
 - **Sequencing with Deterministic Execution:** Transactions are organized into a single ordered sequence and then executed by a deterministic state transition function.
 - **Optimistic Rollup with Interactive Fraud Proofs:** Settles transactions to the Arbitrum chain using an optimistic rollup protocol with interactive fraud proofs.
 - **Geth Integration:** Supports Ethereum's data structures, formats, and virtual machine by integrating Geth, ensuring compatibility with Ethereum.
-- **Dual Compilation for Execution and Proving:** Compiles source code twice—once to native code for execution and once to WebAssembly (WASM) for proving.
+- **Dual Compilation for Execution and Proving:** Compiles source code twice—once to native code for execution and once to WebAssembly (WASM - see layerk-stylus-sdk-wasm) for proving.
   
   <img width="642" alt="image" src="https://github.com/LayerK/LayerK-Blockchain/assets/174424424/4398113e-4155-4e8e-86b7-5bac34bf0335">
 
