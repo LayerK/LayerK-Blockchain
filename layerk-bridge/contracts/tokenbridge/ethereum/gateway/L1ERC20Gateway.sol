@@ -20,6 +20,7 @@ pragma solidity ^0.8.0;
 
 import "./L1ArbitrumExtendedGateway.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../../libraries/Whitelist.sol";
 
 /**
@@ -28,7 +29,7 @@ import "../../libraries/Whitelist.sol";
  * @dev Any ERC20 that requires non-standard functionality should use a separate gateway.
  * Messages to layer 2 use the inbox's createRetryableTicket method.
  */
-contract L1ERC20Gateway is L1ArbitrumExtendedGateway {
+contract L1ERC20Gateway is L1ArbitrumExtendedGateway, ReentrancyGuard {
     // used for create2 address calculation
     bytes32 public cloneableProxyHash;
     // We don't use the solidity creationCode as it breaks when upgrading contracts
@@ -37,22 +38,7 @@ contract L1ERC20Gateway is L1ArbitrumExtendedGateway {
     // whitelist not used anymore
     address public whitelist;
 
-    // start of inline reentrancy guard
-    // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.2/contracts/utils/ReentrancyGuard.sol
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
-    uint256 private _status;
-
-    modifier nonReentrant() {
-        // On the first call to nonReentrant, _notEntered will be true
-        require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
-        // Any calls to nonReentrant after this point will fail
-        _status = _ENTERED;
-        _;
-        _status = _NOT_ENTERED;
-    }
-
-    // end of inline reentrancy guard
+    // ReentrancyGuard included via inheritance
 
     function outboundTransferCustomRefund(
         address _l1Token,
@@ -100,8 +86,6 @@ contract L1ERC20Gateway is L1ArbitrumExtendedGateway {
         l2BeaconProxyFactory = _l2BeaconProxyFactory;
         // disable whitelist by default
         whitelist = address(0);
-        // reentrancy guard
-        _status = _NOT_ENTERED;
     }
 
     /**

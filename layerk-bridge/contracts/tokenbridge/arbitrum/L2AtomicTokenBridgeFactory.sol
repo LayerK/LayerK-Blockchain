@@ -26,10 +26,11 @@ import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 contract L2AtomicTokenBridgeFactory {
     error L2AtomicTokenBridgeFactory_AlreadyExists();
 
-    // In order to avoid having uninitialized logic contracts, `initialize` function will be called
-    // on all logic contracts which don't have initializers disabled. This dummy non-zero address
-    // will be provided to those initializers, as values written to the logic contract's storage
-    // are not used.
+    // In order to avoid having uninitialized logic contracts, `initialize`
+    // functions will be called on all logic contracts which don't have
+    // initializers disabled. A non-zero placeholder address is provided so that
+    // initializers requiring a non-zero parameter can succeed. The value written
+    // to storage is never used.
     address private constant ADDRESS_DEAD = address(0x000000000000000000000000000000000000dEaD);
 
     function deployL2Contracts(

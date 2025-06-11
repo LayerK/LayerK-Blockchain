@@ -43,6 +43,7 @@ contract Whitelist {
 
     event OwnerUpdated(address newOwner);
     event WhitelistUpgraded(address newWhitelist, address[] targets);
+    event WhitelistUpdated(address indexed user, bool allowed);
 
     constructor() {
         owner = msg.sender;
@@ -63,6 +64,7 @@ contract Whitelist {
 
         for (uint256 i = 0; i < user.length; i++) {
             isAllowed[user[i]] = val[i];
+            emit WhitelistUpdated(user[i], val[i]);
         }
     }
 

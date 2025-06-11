@@ -17,6 +17,7 @@ import {TransparentUpgradeableProxy} from
     "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {IERC20, ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 
 /**
  * @title Token Bridge Retryable Ticket Sender
@@ -28,7 +29,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
  *
  */
 contract L1TokenBridgeRetryableSender is Initializable, OwnableUpgradeable {
-    error L1TokenBridgeRetryableSender_RefundFailed();
     error L1TokenBridgeRetryableSender_EthReceivedForFeeToken();
 
     function initialize() public initializer {
@@ -112,11 +112,10 @@ contract L1TokenBridgeRetryableSender is Initializable, OwnableUpgradeable {
             maxSubmissionCost + retryableParams.maxGas * retryableParams.gasPriceBid;
         _createRetryableUsingEth(retryableParams, maxSubmissionCost, retryableValue, data);
 
-        // refund excess value to the deployer
-        // it is known that any eth previously in this contract can be extracted
-        // tho it is not expected that this contract will have any eth
-        (bool success,) = deployer.call{value: address(this).balance}("");
-        if (!success) revert L1TokenBridgeRetryableSender_RefundFailed();
+        // refund excess value to the deployer using a safe transfer helper
+        // it is known that any ETH previously in this contract can be extracted,
+        // though it is not expected that this contract will hold any balance
+        Address.sendValue(payable(deployer), address(this).balance);
     }
 
     function _sendRetryableUsingFeeToken(
