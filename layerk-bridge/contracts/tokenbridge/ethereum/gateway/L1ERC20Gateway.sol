@@ -21,6 +21,7 @@ pragma solidity ^0.8.0;
 import "./L1ArbitrumExtendedGateway.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "../../libraries/Whitelist.sol";
+import "../../libraries/GatewayUtils.sol";
 
 /**
  * @title Layer 1 Gateway contract for bridging standard ERC20s
@@ -131,7 +132,8 @@ contract L1ERC20Gateway is L1ArbitrumExtendedGateway {
         bytes memory _data
     ) public view override returns (bytes memory outboundCalldata) {
         // TODO: cheaper to make static calls or save isDeployed to storage?
-        bytes memory deployData = abi.encode(
+        require(_token != address(0), "INVALID_TOKEN");
+        bytes memory tokenMetadata = abi.encode(
             callStatic(_token, ERC20.name.selector),
             callStatic(_token, ERC20.symbol.selector),
             callStatic(_token, ERC20.decimals.selector)
@@ -143,7 +145,7 @@ contract L1ERC20Gateway is L1ArbitrumExtendedGateway {
             _from,
             _to,
             _amount,
-            GatewayMessageHandler.encodeToL2GatewayMsg(deployData, _data)
+            GatewayMessageHandler.encodeToL2GatewayMsg(tokenMetadata, _data)
         );
 
         return outboundCalldata;
@@ -160,7 +162,6 @@ contract L1ERC20Gateway is L1ArbitrumExtendedGateway {
     }
 
     function getSalt(address l1ERC20) internal view returns (bytes32) {
-        // TODO: use a library
-        return keccak256(abi.encode(counterpartGateway, keccak256(abi.encode(l1ERC20))));
+        return GatewayUtils.computeSalt(counterpartGateway, l1ERC20);
     }
 }
