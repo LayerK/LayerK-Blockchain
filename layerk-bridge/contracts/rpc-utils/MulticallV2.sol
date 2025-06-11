@@ -78,7 +78,7 @@ contract Multicall2 {
         blockHash = blockhash(block.number - 1);
     }
 
-    function tryAggregateGasRation(bool requireSuccess, Call[] memory calls)
+    function tryAggregateGasRatio(bool requireSuccess, Call[] memory calls)
         public
         returns (Result[] memory returnData)
     {
@@ -198,7 +198,7 @@ contract ArbMulticall2 {
         blockHash = blockhash(block.number - 1);
     }
 
-    function tryAggregateGasRation(bool requireSuccess, Call[] memory calls)
+    function tryAggregateGasRatio(bool requireSuccess, Call[] memory calls)
         public
         returns (Result[] memory returnData)
     {

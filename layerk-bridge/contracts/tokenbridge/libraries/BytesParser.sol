@@ -27,13 +27,15 @@ library BytesParser {
         if (input.length != 32) {
             return (false, 0);
         }
-        // TODO: try catch to handle error
-        uint256 inputNum = abi.decode(input, (uint256));
-        if (inputNum > type(uint8).max) {
+        try abi.decode(input, (uint256)) returns (uint256 inputNum) {
+            if (inputNum > type(uint8).max) {
+                return (false, 0);
+            }
+            res = uint8(inputNum);
+            success = true;
+        } catch {
             return (false, 0);
         }
-        res = uint8(inputNum);
-        success = true;
     }
 
     function toString(bytes memory input) internal pure returns (bool success, string memory res) {
@@ -41,31 +43,35 @@ library BytesParser {
             success = false;
             // return default value of string
         } else if (input.length == 32) {
-            // TODO: can validate anything other than length and being null terminated?
+            // validate that the bytes32 is null terminated and contains no
+            // null bytes in the middle of the string
             if (input[31] != bytes1(0x00)) return (false, res);
-            else success = true;
 
-            // here we assume its a null terminated Bytes32 string
-            // https://github.com/ethereum/solidity/blob/5852972ec148bc041909400affc778dee66d384d/test/libsolidity/semanticTests/externalContracts/_stringutils/stringutils.sol#L89
-            // https://github.com/Arachnid/solidity-stringutils
             uint256 len = 32;
             while (len > 0 && input[len - 1] == bytes1(0x00)) {
                 len--;
             }
+            for (uint256 i = 0; i < len; i++) {
+                if (input[i] == bytes1(0x00)) return (false, res);
+            }
+            success = true;
+            // here we assume its a null terminated Bytes32 string
+            // https://github.com/ethereum/solidity/blob/5852972ec148bc041909400affc778dee66d384d/test/libsolidity/semanticTests/externalContracts/_stringutils/stringutils.sol#L89
+            // https://github.com/Arachnid/solidity-stringutils
 
             bytes memory inputTruncated = new bytes(len);
             for (uint8 i = 0; i < len; i++) {
                 inputTruncated[i] = input[i];
             }
-            // we can't just do `res := input` because of the null values in the end
-            // TODO: can we instead use a bitwise AND? build it dynamically with the length
-            assembly {
-                res := inputTruncated
-            }
+            // convert to string without trailing null bytes
+            res = string(inputTruncated);
         } else {
-            // TODO: try catch to handle error
-            success = true;
-            res = abi.decode(input, (string));
+            try abi.decode(input, (string)) returns (string memory decoded) {
+                success = true;
+                res = decoded;
+            } catch {
+                success = false;
+            }
         }
     }
 }
