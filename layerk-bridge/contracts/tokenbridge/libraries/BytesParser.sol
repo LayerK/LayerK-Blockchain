@@ -27,13 +27,15 @@ library BytesParser {
         if (input.length != 32) {
             return (false, 0);
         }
-        // TODO: try catch to handle error
-        uint256 inputNum = abi.decode(input, (uint256));
-        if (inputNum > type(uint8).max) {
+        try abi.decode(input, (uint256)) returns (uint256 inputNum) {
+            if (inputNum > type(uint8).max) {
+                return (false, 0);
+            }
+            res = uint8(inputNum);
+            success = true;
+        } catch {
             return (false, 0);
         }
-        res = uint8(inputNum);
-        success = true;
     }
 
     function toString(bytes memory input) internal pure returns (bool success, string memory res) {
@@ -63,9 +65,12 @@ library BytesParser {
                 res := inputTruncated
             }
         } else {
-            // TODO: try catch to handle error
-            success = true;
-            res = abi.decode(input, (string));
+            try abi.decode(input, (string)) returns (string memory decoded) {
+                success = true;
+                res = decoded;
+            } catch {
+                success = false;
+            }
         }
     }
 }
