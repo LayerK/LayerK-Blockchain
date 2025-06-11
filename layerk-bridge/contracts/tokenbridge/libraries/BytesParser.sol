@@ -43,27 +43,28 @@ library BytesParser {
             success = false;
             // return default value of string
         } else if (input.length == 32) {
-            // TODO: can validate anything other than length and being null terminated?
+            // validate that the bytes32 is null terminated and contains no
+            // null bytes in the middle of the string
             if (input[31] != bytes1(0x00)) return (false, res);
-            else success = true;
 
-            // here we assume its a null terminated Bytes32 string
-            // https://github.com/ethereum/solidity/blob/5852972ec148bc041909400affc778dee66d384d/test/libsolidity/semanticTests/externalContracts/_stringutils/stringutils.sol#L89
-            // https://github.com/Arachnid/solidity-stringutils
             uint256 len = 32;
             while (len > 0 && input[len - 1] == bytes1(0x00)) {
                 len--;
             }
+            for (uint256 i = 0; i < len; i++) {
+                if (input[i] == bytes1(0x00)) return (false, res);
+            }
+            success = true;
+            // here we assume its a null terminated Bytes32 string
+            // https://github.com/ethereum/solidity/blob/5852972ec148bc041909400affc778dee66d384d/test/libsolidity/semanticTests/externalContracts/_stringutils/stringutils.sol#L89
+            // https://github.com/Arachnid/solidity-stringutils
 
             bytes memory inputTruncated = new bytes(len);
             for (uint8 i = 0; i < len; i++) {
                 inputTruncated[i] = input[i];
             }
-            // we can't just do `res := input` because of the null values in the end
-            // TODO: can we instead use a bitwise AND? build it dynamically with the length
-            assembly {
-                res := inputTruncated
-            }
+            // convert to string without trailing null bytes
+            res = string(inputTruncated);
         } else {
             try abi.decode(input, (string)) returns (string memory decoded) {
                 success = true;

@@ -142,7 +142,7 @@ abstract contract L2ArbitrumGateway is L2ArbitrumMessenger, TokenGateway {
         // it and add custom validation for callers (ie only whitelisted users)
 
         // the function is marked as payable to conform to the inheritance setup
-        // this particular code path shouldn't have a msg.value > 0
+        // value transfers are currently unsupported so msg.value must be zero
         // TODO: remove this invariant for execution markets
         require(msg.value == 0, "NO_VALUE");
 
