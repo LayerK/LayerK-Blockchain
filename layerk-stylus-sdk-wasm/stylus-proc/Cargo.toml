@@ -1,0 +1,45 @@
+[package]
+name = "stylus-proc"
+keywords = ["arbitrum", "ethereum", "stylus", "alloy"]
+description = "Procedural macros for stylus-sdk"
+readme = "../README.md"
+
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
+cfg-if.workspace = true
+convert_case.workspace = true
+lazy_static.workspace = true
+proc-macro-error.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
+regex.workspace = true
+sha3.workspace = true
+syn.workspace = true
+syn-solidity.workspace = true
+trybuild.workspace = true
+
+[dev-dependencies]
+paste.workspace = true
+pretty_assertions.workspace = true
+prettyplease.workspace = true
+stylus-sdk.workspace = true
+stylus-core.workspace = true
+
+[features]
+default = ["stylus-test"]
+export-abi = ["stylus-sdk/export-abi"]
+reentrant = []
+stylus-test = ["stylus-sdk/stylus-test"]
+
+[package.metadata.docs.rs]
+features = ["export-abi"]
+
+[lib]
+proc-macro = true
