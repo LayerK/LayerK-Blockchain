@@ -1,4 +1,4 @@
-import { Wallet, ethers } from 'ethers'
+import { BigNumber, Wallet, ethers } from 'ethers'
 import { JsonRpcProvider } from '@ethersproject/providers'
 import { L1Network, L2Network, addCustomNetwork } from '@arbitrum/sdk'
 import { Bridge__factory } from '@arbitrum/sdk/dist/lib/abi/factories/Bridge__factory'
@@ -10,11 +10,14 @@ import {
   getEstimateForDeployingFactory,
   registerGateway,
 } from '../atomicTokenBridgeDeployer'
-import { l2Networks } from '@arbitrum/sdk/dist/lib/dataEntities/networks'
-import { IOwnable__factory, TestWETH9__factory } from '../../build/types'
+import {
+  ERC20__factory,
+  IOwnable__factory,
+  TestWETH9__factory,
+} from '../../build/types'
 
-const LOCALHOST_L2_RPC = 'http://localhost:8547'
-const LOCALHOST_L3_RPC = 'http://localhost:3347'
+const LOCALHOST_L2_RPC = 'http://127.0.0.1:8547'
+const LOCALHOST_L3_RPC = 'http://127.0.0.1:3347'
 const LOCALHOST_L3_OWNER_KEY =
   '0xecdf21cb41c65afb51f91df408b7656e2c8739a5877f2814add0afd780cc210e'
 /**
@@ -71,39 +74,29 @@ export const setupTokenBridgeInLocalEnv = async () => {
     new ethers.providers.JsonRpcProvider(childRpc)
   )
 
+  /// register networks
   const { l1Network, l2Network: coreL2Network } = await getLocalNetworks(
     parentRpc,
     childRpc,
     rollupAddress
   )
-
-  // register - needed for retryables
-  const existingL2Network = l2Networks[coreL2Network.chainID.toString()]
-  if (!existingL2Network) {
-    addCustomNetwork({
-      customL1Network: l1Network,
-      customL2Network: {
-        ...coreL2Network,
-        tokenBridge: {
-          l1CustomGateway: '',
-          l1ERC20Gateway: '',
-          l1GatewayRouter: '',
-          l1MultiCall: '',
-          l1ProxyAdmin: '',
-          l1Weth: '',
-          l1WethGateway: '',
-
-          l2CustomGateway: '',
-          l2ERC20Gateway: '',
-          l2GatewayRouter: '',
-          l2Multicall: '',
-          l2ProxyAdmin: '',
-          l2Weth: '',
-          l2WethGateway: '',
-        },
-      },
-    })
+  const _l1Network = l1Network as L2Network
+  const ethLocal: L1Network = {
+    blockTime: 10,
+    chainID: _l1Network.partnerChainID,
+    explorerUrl: '',
+    isCustom: true,
+    name: 'EthLocal',
+    partnerChainIDs: [_l1Network.chainID],
+    isArbitrum: false,
   }
+  addCustomNetwork({
+    customL1Network: ethLocal,
+    customL2Network: _l1Network,
+  })
+  addCustomNetwork({
+    customL2Network: coreL2Network,
+  })
 
   // prerequisite - deploy L1 creator and set templates
   console.log('Deploying L1TokenBridgeCreator')
@@ -203,13 +196,73 @@ export const getLocalNetworks = async (
   l2Url: string,
   rollupAddress?: string
 ): Promise<{
-  l1Network: L1Network
-  l2Network: Omit<L2Network, 'tokenBridge'>
+  l1Network: L1Network | L2Network
+  l2Network: L2Network
 }> => {
   const l1Provider = new JsonRpcProvider(l1Url)
   const l2Provider = new JsonRpcProvider(l2Url)
-  let deploymentData: string
 
+  const l1NetworkInfo = await l1Provider.getNetwork()
+  const l2NetworkInfo = await l2Provider.getNetwork()
+
+  /// get parent chain info
+  const container = execSync(
+    'docker ps --filter "name=sequencer" --format "{{.Names}}"'
+  )
+    .toString()
+    .trim()
+  const l2DeploymentData = execSync(
+    `docker exec ${container} cat /config/deployment.json`
+  ).toString()
+  const l2Data = JSON.parse(l2DeploymentData) as {
+    bridge: string
+    inbox: string
+    ['sequencer-inbox']: string
+    rollup: string
+  }
+
+  const l1Network: L1Network | L2Network = {
+    partnerChainID: 1337,
+    partnerChainIDs: [l2NetworkInfo.chainId],
+    isArbitrum: true,
+    confirmPeriodBlocks: 20,
+    retryableLifetimeSeconds: 7 * 24 * 60 * 60,
+    nitroGenesisBlock: 0,
+    nitroGenesisL1Block: 0,
+    depositTimeout: 900000,
+    chainID: 412346,
+    explorerUrl: '',
+    isCustom: true,
+    name: 'ArbLocal',
+    blockTime: 0.25,
+    ethBridge: {
+      bridge: l2Data.bridge,
+      inbox: l2Data.inbox,
+      outbox: '',
+      rollup: l2Data.rollup,
+      sequencerInbox: l2Data['sequencer-inbox'],
+    },
+    tokenBridge: {
+      l1CustomGateway: '',
+      l1ERC20Gateway: '',
+      l1GatewayRouter: '',
+      l1MultiCall: '',
+      l1ProxyAdmin: '',
+      l1Weth: '',
+      l1WethGateway: '',
+
+      l2CustomGateway: '',
+      l2ERC20Gateway: '',
+      l2GatewayRouter: '',
+      l2Multicall: '',
+      l2ProxyAdmin: '',
+      l2Weth: '',
+      l2WethGateway: '',
+    },
+  }
+
+  /// get L3 info
+  let deploymentData: string
   let data = {
     bridge: '',
     inbox: '',
@@ -242,28 +295,14 @@ export const getLocalNetworks = async (
     data.rollup = rollupAddress!
   }
 
-  const rollup = RollupAdminLogic__factory.connect(data.rollup, l1Provider)
-  const confirmPeriodBlocks = await rollup.confirmPeriodBlocks()
-
   const bridge = Bridge__factory.connect(data.bridge, l1Provider)
   const outboxAddr = await bridge.allowedOutboxList(0)
 
-  const l1NetworkInfo = await l1Provider.getNetwork()
-  const l2NetworkInfo = await l2Provider.getNetwork()
-
-  const l1Network: L1Network = {
-    blockTime: 10,
-    chainID: l1NetworkInfo.chainId,
-    explorerUrl: '',
-    isCustom: true,
-    name: 'EthLocal',
-    partnerChainIDs: [l2NetworkInfo.chainId],
-    isArbitrum: false,
-  }
-
-  const l2Network: Omit<L2Network, 'tokenBridge'> = {
+  const l2Network: L2Network = {
+    partnerChainID: l1NetworkInfo.chainId,
+    partnerChainIDs: [],
     chainID: l2NetworkInfo.chainId,
-    confirmPeriodBlocks: confirmPeriodBlocks.toNumber(),
+    confirmPeriodBlocks: 20,
     ethBridge: {
       bridge: data.bridge,
       inbox: data.inbox,
@@ -274,15 +313,55 @@ export const getLocalNetworks = async (
     explorerUrl: '',
     isArbitrum: true,
     isCustom: true,
-    name: 'ArbLocal',
-    partnerChainID: l1NetworkInfo.chainId,
+    blockTime: 0.25,
+    name: 'OrbitLocal',
     retryableLifetimeSeconds: 7 * 24 * 60 * 60,
     nitroGenesisBlock: 0,
     nitroGenesisL1Block: 0,
     depositTimeout: 900000,
+    tokenBridge: {
+      l1CustomGateway: '',
+      l1ERC20Gateway: '',
+      l1GatewayRouter: '',
+      l1MultiCall: '',
+      l1ProxyAdmin: '',
+      l1Weth: '',
+      l1WethGateway: '',
+
+      l2CustomGateway: '',
+      l2ERC20Gateway: '',
+      l2GatewayRouter: '',
+      l2Multicall: '',
+      l2ProxyAdmin: '',
+      l2Weth: '',
+      l2WethGateway: '',
+    },
   }
   return {
     l1Network,
     l2Network,
+  }
+}
+
+/**
+ * Scale the amount from 18-denomination to the fee token decimals denomination
+ */
+export async function _getScaledAmount(
+  feeToken: string,
+  amount: BigNumber,
+  provider: ethers.providers.Provider
+): Promise<BigNumber> {
+  const decimals = await ERC20__factory.connect(feeToken, provider).decimals()
+  if (decimals == 18) {
+    return amount
+  } else if (decimals < 18) {
+    let scaledAmount = amount.div(BigNumber.from(10).pow(18 - decimals))
+    // round up if necessary
+    if (scaledAmount.mul(BigNumber.from(10).pow(18 - decimals)).lt(amount)) {
+      scaledAmount = scaledAmount.add(1)
+    }
+    return scaledAmount
+  } else {
+    return amount.mul(BigNumber.from(10).pow(decimals - 18))
   }
 }
