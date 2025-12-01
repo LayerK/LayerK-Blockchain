@@ -12,6 +12,77 @@ import { _isRunningOnArbitrum, verifyContract } from './deploymentUtils'
 // 1 gwei
 const MAX_FER_PER_GAS = BigNumber.from('1000000000')
 
+const formatError = (error: unknown): string => {
+  if (!error) return 'Unknown error'
+  if (typeof error === 'string') return error
+  if (error instanceof Error) return error.message
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
+const normalizeAddress = (
+  value: string | undefined,
+  label: string,
+  { allowEmpty = false }: { allowEmpty?: boolean } = {}
+): string => {
+  const trimmed = value?.trim() ?? ''
+  if (!trimmed) {
+    if (allowEmpty) {
+      return ''
+    }
+    throw new Error(`${label} must be provided`)
+  }
+  if (!ethers.utils.isAddress(trimmed)) {
+    throw new Error(`Invalid ${label}: ${value}`)
+  }
+  return ethers.utils.getAddress(trimmed)
+}
+
+const parseAddressList = (
+  raw: string | undefined,
+  label: string
+): string[] => {
+  if (!raw) {
+    return []
+  }
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .map((entry) => normalizeAddress(entry, `${label} entry`))
+}
+
+const parseChainConfig = (raw: unknown): any => {
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw)
+    } catch (error) {
+      throw new Error(
+        `Invalid chain config JSON: ${formatError(error)}`
+      )
+    }
+  }
+  if (raw && typeof raw === 'object') {
+    return raw
+  }
+  throw new Error('Chain config must be provided')
+}
+
+const parseParentChainId = (): number => {
+  const rawValue = process.env.PARENT_CHAIN_ID
+  if (!rawValue) {
+    throw new Error('PARENT_CHAIN_ID env var must be set')
+  }
+  const numericValue = Number(rawValue)
+  if (!Number.isFinite(numericValue)) {
+    throw new Error(`Invalid PARENT_CHAIN_ID value: ${rawValue}`)
+  }
+  return numericValue
+}
+
 interface RollupCreatedEvent {
   event: string
   address: string
@@ -190,7 +261,7 @@ export async function createRollup(
 
       const chainInfo: ChainInfo = {
         'chain-name': 'dev-chain',
-        'parent-chain-id': +process.env.PARENT_CHAIN_ID!,
+        'parent-chain-id': parseParentChainId(),
         'parent-chain-is-arbitrum': await _isRunningOnArbitrum(signer),
         'sequencer-url': '',
         'secondary-forwarding-target': '',
@@ -198,19 +269,17 @@ export async function createRollup(
         'secondary-feed-url': '',
         'das-index-url': '',
         'has-genesis-state': false,
-        'chain-config': JSON.parse(deployParams.config.chainConfig),
+        'chain-config': parseChainConfig(deployParams.config.chainConfig),
         rollup: rollupCreationResult,
       }
 
       return { rollupCreationResult, chainInfo }
     } else {
-      console.error('RollupCreated event not found')
+      throw new Error('RollupCreated event not found in transaction receipt')
     }
   } catch (error) {
-    console.error(
-      'Deployment failed:',
-      error instanceof Error ? error.message : error
-    )
+    console.error('Deployment failed:', formatError(error))
+    throw error
   }
 
   return null
@@ -222,8 +291,10 @@ async function _getDevRollupConfig(
   stakeToken: string
 ) {
   // set up owner address
-  const ownerAddress =
-    process.env.OWNER_ADDRESS !== undefined ? process.env.OWNER_ADDRESS : ''
+  const ownerAddress = normalizeAddress(
+    process.env.OWNER_ADDRESS,
+    'OWNER_ADDRESS'
+  )
 
   // set up max data size
   const _maxDataSize =
@@ -248,32 +319,34 @@ async function _getDevRollupConfig(
   const chainConfig = await fs.readFile(childChainConfigPath, {
     encoding: 'utf8',
   })
+  const parsedChainConfig = parseChainConfig(chainConfig)
+  if (parsedChainConfig.chainId === undefined) {
+    throw new Error('chainConfig JSON must include a chainId field')
+  }
 
   // get wasmModuleRoot
-  const wasmModuleRoot =
+  const wasmModuleRootEnv =
     process.env.WASM_MODULE_ROOT !== undefined
-      ? process.env.WASM_MODULE_ROOT
+      ? process.env.WASM_MODULE_ROOT.trim()
       : ''
+  if (
+    wasmModuleRootEnv &&
+    !ethers.utils.isHexString(wasmModuleRootEnv, 32)
+  ) {
+    throw new Error('WASM_MODULE_ROOT must be a 32-byte hex string')
+  }
+  const wasmModuleRoot = wasmModuleRootEnv
 
   // set up batch posters
-  const sequencerAddress =
-    process.env.SEQUENCER_ADDRESS !== undefined
-      ? process.env.SEQUENCER_ADDRESS
-      : ''
+  const sequencerAddress = normalizeAddress(
+    process.env.SEQUENCER_ADDRESS,
+    'SEQUENCER_ADDRESS'
+  )
   const batchPostersString =
     process.env.BATCH_POSTERS !== undefined ? process.env.BATCH_POSTERS : ''
-  let batchPosters: string[] = []
-  if (batchPostersString.length == 0) {
-    batchPosters.push(sequencerAddress)
-  } else {
-    const batchPostesArr = batchPostersString.split(',')
-    for (let i = 0; i < batchPostesArr.length; i++) {
-      if (ethers.utils.isAddress(batchPostesArr[i])) {
-        batchPosters.push(batchPostesArr[i])
-      } else {
-        throw new Error('Invalid address in batch posters array')
-      }
-    }
+  let batchPosters = parseAddressList(batchPostersString, 'BATCH_POSTERS')
+  if (batchPosters.length === 0) {
+    batchPosters = [sequencerAddress]
   }
 
   // set up batch poster manager
@@ -281,15 +354,12 @@ async function _getDevRollupConfig(
     process.env.BATCH_POSTER_MANAGER !== undefined
       ? process.env.BATCH_POSTER_MANAGER
       : ''
-  let batchPosterManager = ''
-  if (ethers.utils.isAddress(batchPosterManagerEnv)) {
-    batchPosterManager = batchPosterManagerEnv
-  } else {
-    if (batchPosterManagerEnv.length == 0) {
-      batchPosterManager = ownerAddress
-    } else {
-      throw new Error('Invalid address for batch poster manager')
-    }
+  let batchPosterManager = ownerAddress
+  if (batchPosterManagerEnv.trim().length > 0) {
+    batchPosterManager = normalizeAddress(
+      batchPosterManagerEnv,
+      'BATCH_POSTER_MANAGER'
+    )
   }
 
   return {
@@ -301,7 +371,7 @@ async function _getDevRollupConfig(
       wasmModuleRoot: wasmModuleRoot,
       owner: ownerAddress,
       loserStakeEscrow: ethers.constants.AddressZero,
-      chainId: JSON.parse(chainConfig)['chainId'],
+      chainId: parsedChainConfig['chainId'],
       chainConfig: chainConfig,
       minimumAssertionPeriod: 75,
       validatorAfkBlocks: 201600,
@@ -338,10 +408,9 @@ async function _getDevRollupConfig(
     deployerAddress: string,
     nonce: number
   ): string {
-    const nonceHex = BigNumber.from(nonce).toHexString()
     return ethers.utils.getContractAddress({
       from: deployerAddress,
-      nonce: nonceHex,
+      nonce,
     })
   }
 }

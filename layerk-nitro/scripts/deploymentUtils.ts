@@ -1,5 +1,12 @@
 import { ethers } from 'hardhat'
-import { ContractFactory, Contract, Overrides, BigNumber, Wallet } from 'ethers'
+import {
+  ContractFactory,
+  Contract,
+  Overrides,
+  BigNumber,
+  Wallet,
+  Signer,
+} from 'ethers'
 import '@nomiclabs/hardhat-ethers'
 import { run } from 'hardhat'
 import {
@@ -19,17 +26,36 @@ const INIT_DECAY = 10322197911
 const ARB_OWNER_ADDRESS = '0x0000000000000000000000000000000000000070'
 const ARB_OWNER_PUBLIC_ADDRESS = '0x000000000000000000000000000000000000006b'
 const ARB_SYS_ADDRESS = '0x0000000000000000000000000000000000000064'
+const MAX_VERIFICATION_RETRIES = 3
+const VERIFICATION_RETRY_DELAY_MS = 5_000
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+const getErrorMessage = (error: unknown): string => {
+  if (!error) {
+    return 'Unknown error'
+  }
+  if (typeof error === 'string') {
+    return error
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return JSON.stringify(error)
+}
 
 // Define a verification function
 export async function verifyContract(
   contractName: string,
   contractAddress: string,
   constructorArguments: any[] = [],
-  contractPathAndName?: string // optional
+  contractPathAndName?: string,
+  attempt: number = 0
 ): Promise<void> {
+  if (process.env.DISABLE_VERIFICATION === 'true') return
+
   try {
-    if (process.env.DISABLE_VERIFICATION === 'true') return
-    // Define the verification options with possible 'contract' property
     const verificationOptions: {
       contract?: string
       address: string
@@ -41,7 +67,6 @@ export async function verifyContract(
       force: true,
     }
 
-    // if contractPathAndName is provided, add it to the verification options
     if (contractPathAndName) {
       verificationOptions.contract = contractPathAndName
     }
@@ -49,27 +74,50 @@ export async function verifyContract(
     await run('verify:verify', verificationOptions)
     console.log(`Verified contract ${contractName} successfully.`)
   } catch (error: any) {
-    if (error.message.toLowerCase().includes('already verified')) {
+    const message = getErrorMessage(error)
+    const normalizedMessage = message.toLowerCase()
+
+    if (normalizedMessage.includes('already verified')) {
       console.log(`Contract ${contractName} is already verified.`)
-    } else if (error.message.includes('does not have bytecode')) {
-      await verifyContract(
+      return
+    }
+
+    if (message.includes('does not have bytecode')) {
+      if (attempt >= MAX_VERIFICATION_RETRIES) {
+        console.error(
+          `Verification for ${contractName} failed after ${
+            attempt + 1
+          } attempts (bytecode not found).`
+        )
+        return
+      }
+      const delayMs = VERIFICATION_RETRY_DELAY_MS * (attempt + 1)
+      console.log(
+        `Bytecode for ${contractName} not available yet. Retrying in ${
+          delayMs / 1000
+        }s...`
+      )
+      await delay(delayMs)
+      return verifyContract(
         contractName,
         contractAddress,
         constructorArguments,
-        contractPathAndName
-      )
-    } else {
-      console.error(
-        `Verification for ${contractName} failed with the following error: ${error.message}`
+        contractPathAndName,
+        attempt + 1
       )
     }
+
+    console.error(
+      `Verification for ${contractName} failed with the following error: ${message}`
+    )
+    throw error
   }
 }
 
 // Function to handle contract deployment
 export async function deployContract(
   contractName: string,
-  signer: any,
+  signer: Signer,
   constructorArgs: any[] = [],
   verify: boolean = true,
   overrides?: Overrides
@@ -103,7 +151,7 @@ export async function deployContract(
 }
 
 // Deploy upgrade executor from imported bytecode
-export async function deployUpgradeExecutor(signer: any): Promise<Contract> {
+export async function deployUpgradeExecutor(signer: Signer): Promise<Contract> {
   const upgradeExecutorFac = await ethers.getContractFactory(
     UpgradeExecutorABI,
     UpgradeExecutorBytecode
@@ -115,7 +163,7 @@ export async function deployUpgradeExecutor(signer: any): Promise<Contract> {
 
 // Function to handle all deployments of core contracts using deployContract function
 export async function deployAllContracts(
-  signer: any,
+  signer: Signer,
   maxDataSize: BigNumber,
   verify: boolean = true
 ): Promise<Record<string, Contract>> {
@@ -343,7 +391,7 @@ export async function deployAndSetCacheManager(
 }
 
 // Check if we're deploying to an Arbitrum chain
-export async function _isRunningOnArbitrum(signer: any): Promise<boolean> {
+export async function _isRunningOnArbitrum(signer: Signer): Promise<boolean> {
   const arbSys = ArbSys__factory.connect(ARB_SYS_ADDRESS, signer)
   try {
     await arbSys.arbOSVersion()
