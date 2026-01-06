@@ -22,3 +22,6 @@
 - **ProxyAdmin**: [0x0Da76E552AC613261f7CCE12CedD960De719Ca86](https://explorer.layerk.com/address/0x0Da76E552AC613261f7CCE12CedD960De719Ca86)
 - **Router**: [0x7be9EF89F0fe4128aafc81c8fa827026A6fE44Cf](https://explorer.layerk.com/address/0x7be9EF89F0fe4128aafc81c8fa827026A6fE44Cf)
 - **StandardGateway**: [0x0A5299d90A4E3928B7c4e3298055c87Db1b54B52](https://explorer.layerk.com/address/0x0A5299d90A4E3928B7c4e3298055c87Db1b54B52)
+
+
+#### NOTE: Testnet contracts are different
