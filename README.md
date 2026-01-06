@@ -115,7 +115,7 @@ LayerK prioritizes security through:
 - **Smart Contract Audits:** Regular audits to mitigate vulnerabilities.
 - **Network Monitoring:** Continuous activity monitoring for threat detection.
 
-### 9. Contracts Deployed
+### 9. Contracts Deployed [Testnet contracts are different]
 
 #### Core
 - **Rollup**: [0x9D96a05467Bb546b50ad32a0d140A4A4706f55F6](https://arbiscan.io/address/0x9D96a05467Bb546b50ad32a0d140A4A4706f55F6)
