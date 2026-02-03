@@ -1,6 +1,4 @@
-import { exec } from 'child_process'
-import { ethers } from 'ethers'
-
+import { spawn } from 'child_process'
 export class ContractVerifier {
   chainId: number
   apiKey: string = ''
@@ -70,30 +68,57 @@ export class ContractVerifier {
     // avoid rate limiting
     await new Promise(resolve => setTimeout(resolve, 1000))
 
-    let command = `forge verify-contract --chain-id ${this.chainId} --compiler-version ${this.COMPILER_VERSION}`
-
-    if (_numOfOptimization !== undefined) {
-      command = `${command} --num-of-optimizations ${_numOfOptimization}`
-    } else {
-      command = `${command} --num-of-optimizations ${this.NUM_OF_OPTIMIZATIONS}`
-    }
-
     const sourceFile =
       this.contractToSource[name as keyof typeof this.contractToSource]
+    if (!sourceFile) {
+      throw new Error(`Unknown contract key: ${name}`)
+    }
+
+    const args = [
+      'verify-contract',
+      '--chain-id',
+      String(this.chainId),
+      '--compiler-version',
+      this.COMPILER_VERSION,
+      '--num-of-optimizations',
+      String(
+        _numOfOptimization !== undefined
+          ? _numOfOptimization
+          : this.NUM_OF_OPTIMIZATIONS
+      ),
+    ]
 
     if (constructorArgs) {
-      command = `${command} --constructor-args ${constructorArgs}`
+      args.push('--constructor-args', constructorArgs)
     }
-    command = `${command} ${contractAddress} ${sourceFile} --etherscan-api-key ${this.apiKey}`
+    args.push(
+      contractAddress,
+      sourceFile,
+      '--etherscan-api-key',
+      this.apiKey
+    )
 
-    exec(command, (err: Error | null, stdout: string, stderr: string) => {
+    const command = `forge ${args.join(' ')}`
+    const child = spawn('forge', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stderr = ''
+    child.stderr.on('data', chunk => {
+      stderr += chunk.toString()
+    })
+
+    child.on('error', err => {
       console.log('-----------------')
       console.log(command)
-      if (err) {
+      console.log('Failed to submit for verification', contractAddress, err)
+    })
+
+    child.on('close', code => {
+      console.log('-----------------')
+      console.log(command)
+      if (code !== 0) {
         console.log(
           'Failed to submit for verification',
           contractAddress,
-          stderr
+          stderr.trim()
         )
       } else {
         console.log('Successfully submitted for verification', contractAddress)

@@ -43,10 +43,14 @@ async function checkBlock(blockNumber) {
   });
 }
 
+let pending = Promise.resolve();
+
 provider.on('block', (blockNumber) => {
-  checkBlock(blockNumber).catch((err) => {
-    console.error(`Error checking block ${blockNumber}:`, err);
-  });
+  pending = pending
+    .then(() => checkBlock(blockNumber))
+    .catch((err) => {
+      console.error(`Error checking block ${blockNumber}:`, err);
+    });
 });
 
 provider.on('error', (error) => {

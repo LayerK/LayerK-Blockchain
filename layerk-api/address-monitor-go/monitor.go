@@ -23,8 +23,40 @@ var addressesToMonitor = []string{
 	"0xDe96e7Ed414943Ebb73aE64B517166Ad22e39729",
 }
 
+var monitoredSet = func() map[string]struct{} {
+	set := make(map[string]struct{}, len(addressesToMonitor))
+	for _, addr := range addressesToMonitor {
+		set[strings.ToLower(addr)] = struct{}{}
+	}
+	return set
+}()
+
+type rpcResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      int             `json:"id"`
+	Result  json.RawMessage `json:"result"`
+	Error   *rpcError       `json:"error,omitempty"`
+}
+
+type rpcError struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+type rpcTx struct {
+	From  string  `json:"from"`
+	To    *string `json:"to"`
+	Hash  string  `json:"hash"`
+	Value string  `json:"value"`
+}
+
+type rpcBlock struct {
+	Transactions []rpcTx `json:"transactions"`
+}
+
 // Function to make JSON-RPC calls
-func makeRPCRequest(method string, params []interface{}) (map[string]interface{}, error) {
+func makeRPCRequest(method string, params []interface{}, result interface{}) error {
 	// Prepare the JSON payload
 	payload := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -34,50 +66,60 @@ func makeRPCRequest(method string, params []interface{}) (map[string]interface{}
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Make the HTTP POST request
 	req, err := http.NewRequest(http.MethodPost, rpcURL, bytes.NewBuffer(data))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("unexpected RPC status code: %d", resp.StatusCode)
+		return fmt.Errorf("unexpected RPC status code: %d", resp.StatusCode)
 	}
 
 	// Decode the JSON response
-	var result map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	var response rpcResponse
+	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Check for errors in the response
-	if errData, exists := result["error"]; exists {
-		return nil, fmt.Errorf("RPC Error: %v", errData)
+	if response.Error != nil {
+		return fmt.Errorf("RPC Error: %d %s", response.Error.Code, response.Error.Message)
 	}
 
-	return result, nil
+	if result == nil {
+		return nil
+	}
+
+	if len(response.Result) == 0 || bytes.Equal(bytes.TrimSpace(response.Result), []byte("null")) {
+		return fmt.Errorf("RPC result is null")
+	}
+
+	if err := json.Unmarshal(response.Result, result); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Function to check if an address is in the monitoring list
 func isMonitoredAddress(address string) bool {
-	address = strings.ToLower(address)
-	for _, addr := range addressesToMonitor {
-		if strings.ToLower(addr) == address {
-			return true
-		}
+	if address == "" {
+		return false
 	}
-	return false
+	_, ok := monitoredSet[strings.ToLower(address)]
+	return ok
 }
 
 // Function to convert Wei to Ether
@@ -108,45 +150,34 @@ func hexToBigInt(hexStr string) (*big.Int, error) {
 func checkBlock(blockNumberHex string) error {
 	fmt.Printf("Checking block %s...\n", blockNumberHex)
 	params := []interface{}{blockNumberHex, true}
-	response, err := makeRPCRequest("eth_getBlockByNumber", params)
-	if err != nil {
-		return err
+	var block rpcBlock
+	if err := makeRPCRequest("eth_getBlockByNumber", params, &block); err != nil {
+		return fmt.Errorf("block %s returned empty result: %w", blockNumberHex, err)
 	}
 
-	rawResult, hasResult := response["result"]
-	if !hasResult || rawResult == nil {
-		return fmt.Errorf("block %s returned empty result", blockNumberHex)
-	}
-
-	blockData, ok := rawResult.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("block %s result has unexpected shape", blockNumberHex)
-	}
-
-	transactions, ok := blockData["transactions"].([]interface{})
-	if !ok {
+	if block.Transactions == nil {
 		return fmt.Errorf("block %s missing transactions array", blockNumberHex)
 	}
 
-	for _, txInterface := range transactions {
-		tx, ok := txInterface.(map[string]interface{})
-		if !ok {
-			continue
+	for _, tx := range block.Transactions {
+		from := tx.From
+		to := ""
+		if tx.To != nil {
+			to = *tx.To
 		}
-
-		from, _ := tx["from"].(string)
-		to, _ := tx["to"].(string)
 
 		if isMonitoredAddress(from) || isMonitoredAddress(to) {
 			fmt.Println("-----------------------------------------")
 			fmt.Printf("Block Number: %s\n", blockNumberHex)
-			if hash, ok := tx["hash"].(string); ok {
-				fmt.Printf("Transaction Hash: %s\n", hash)
-			}
+			fmt.Printf("Transaction Hash: %s\n", tx.Hash)
 			fmt.Printf("From: %s\n", from)
-			fmt.Printf("To: %s\n", to)
-			if value, ok := tx["value"].(string); ok {
-				fmt.Printf("Value: %s LYK\n", weiToEther(value))
+			if to == "" {
+				fmt.Printf("To: %s\n", "Contract Creation")
+			} else {
+				fmt.Printf("To: %s\n", to)
+			}
+			if tx.Value != "" {
+				fmt.Printf("Value: %s LYK\n", weiToEther(tx.Value))
 			}
 			fmt.Println("-----------------------------------------\n")
 		}
@@ -160,16 +191,9 @@ func main() {
 
 	for {
 		// Get the latest block number
-		response, err := makeRPCRequest("eth_blockNumber", []interface{}{})
-		if err != nil {
+		var currentBlockNumberHex string
+		if err := makeRPCRequest("eth_blockNumber", []interface{}{}, &currentBlockNumberHex); err != nil {
 			fmt.Println("Error fetching block number:", err)
-			time.Sleep(pollInterval)
-			continue
-		}
-
-		currentBlockNumberHex, ok := response["result"].(string)
-		if !ok {
-			fmt.Println("RPC response missing block number result")
 			time.Sleep(pollInterval)
 			continue
 		}

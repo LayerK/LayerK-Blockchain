@@ -20,6 +20,21 @@ const LOCALHOST_L2_RPC = 'http://127.0.0.1:8547'
 const LOCALHOST_L3_RPC = 'http://127.0.0.1:3347'
 const LOCALHOST_L3_OWNER_KEY =
   '0xecdf21cb41c65afb51f91df408b7656e2c8739a5877f2814add0afd780cc210e'
+
+const dockerContainerCache: Record<string, string> = {}
+
+const getDockerContainerName = (filter: string) => {
+  if (dockerContainerCache[filter]) {
+    return dockerContainerCache[filter]
+  }
+  const container = execSync(
+    `docker ps --filter "name=${filter}" --format "{{.Names}}"`
+  )
+    .toString()
+    .trim()
+  dockerContainerCache[filter] = container
+  return container
+}
 /**
  * Steps:
  * - read network info from local container and register networks
@@ -206,11 +221,7 @@ export const getLocalNetworks = async (
   const l2NetworkInfo = await l2Provider.getNetwork()
 
   /// get parent chain info
-  const container = execSync(
-    'docker ps --filter "name=sequencer" --format "{{.Names}}"'
-  )
-    .toString()
-    .trim()
+  const container = getDockerContainerName('sequencer')
   const l2DeploymentData = execSync(
     `docker exec ${container} cat /config/deployment.json`
   ).toString()
@@ -271,12 +282,7 @@ export const getLocalNetworks = async (
   }
 
   if (rollupAddress === undefined || rollupAddress === '') {
-    let sequencerContainer = execSync(
-      'docker ps --filter "name=l3node" --format "{{.Names}}"'
-    )
-      .toString()
-      .trim()
-
+    const sequencerContainer = getDockerContainerName('l3node')
     deploymentData = execSync(
       `docker exec ${sequencerContainer} cat /config/l3deployment.json`
     ).toString()
@@ -352,16 +358,18 @@ export async function _getScaledAmount(
   provider: ethers.providers.Provider
 ): Promise<BigNumber> {
   const decimals = await ERC20__factory.connect(feeToken, provider).decimals()
-  if (decimals == 18) {
+  if (decimals === 18) {
     return amount
-  } else if (decimals < 18) {
-    let scaledAmount = amount.div(BigNumber.from(10).pow(18 - decimals))
+  }
+
+  const scale = BigNumber.from(10).pow(Math.abs(18 - decimals))
+  if (decimals < 18) {
+    let scaledAmount = amount.div(scale)
     // round up if necessary
-    if (scaledAmount.mul(BigNumber.from(10).pow(18 - decimals)).lt(amount)) {
+    if (scaledAmount.mul(scale).lt(amount)) {
       scaledAmount = scaledAmount.add(1)
     }
     return scaledAmount
-  } else {
-    return amount.mul(BigNumber.from(10).pow(decimals - 18))
   }
+  return amount.mul(scale)
 }

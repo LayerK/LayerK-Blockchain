@@ -1,5 +1,5 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types/runtime'
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs'
+import { promises as fsPromises, existsSync } from 'fs'
 import childProcess from 'child_process'
 import prompts from 'prompts'
 import {
@@ -81,10 +81,10 @@ export const initUpgrades = (
     const path = `${rootDir}/_deployments/${network.chainId}_queued-updates.json`
     if (!existsSync(path)) {
       console.log('New network; creating queued updates file')
-      writeFileSync(path, JSON.stringify({}))
+      await fsPromises.writeFile(path, JSON.stringify({}))
       return { path, data: {} }
     }
-    const jsonBuff = readFileSync(path)
+    const jsonBuff = await fsPromises.readFile(path)
     return { path, data: JSON.parse(jsonBuff.toString()) as QueuedUpdates }
   }
 
@@ -98,7 +98,7 @@ export const initUpgrades = (
       console.log('New network; need to set up _current_deployments.json file')
       throw Error('No current deployments')
     }
-    const jsonBuff = readFileSync(path)
+    const jsonBuff = await fsPromises.readFile(path)
     return {
       path,
       data: JSON.parse(jsonBuff.toString()) as CurrentDeployments,
@@ -115,7 +115,7 @@ export const initUpgrades = (
 
     console.log('Creating a new tmp deployments file:')
     const path = await tmpDeploymentsPath()
-    writeFileSync(path, JSON.stringify(currentDeployments))
+    await fsPromises.writeFile(path, JSON.stringify(currentDeployments))
     return {
       path,
       data: currentDeployments,
@@ -144,11 +144,11 @@ export const initUpgrades = (
           'tmp deployments file found; do you want to resume deployments with it?',
         initial: true,
       })
-      if (res.value !== 'Yes') {
+      if (!res.value) {
         console.log('exiting')
         process.exit(0)
       }
-      const jsonBuff = readFileSync(path)
+      const jsonBuff = await fsPromises.readFile(path)
       return {
         path,
         data: JSON.parse(jsonBuff.toString()) as CurrentDeployments,
@@ -241,7 +241,7 @@ export const initUpgrades = (
       console.log(receipt)
       console.log('')
 
-      writeFileSync(path, JSON.stringify(queuedUpdatesData))
+      await fsPromises.writeFile(path, JSON.stringify(queuedUpdatesData))
     }
   }
 
@@ -401,16 +401,25 @@ export const initUpgrades = (
       console.log('Setting new tmp: deployment data')
 
       tmpDeploymentsJsonData.contracts[contractName] = newDeploymentData
-      writeFileSync(tmpDeploymentsPath, JSON.stringify(tmpDeploymentsJsonData))
+      await fsPromises.writeFile(
+        tmpDeploymentsPath,
+        JSON.stringify(tmpDeploymentsJsonData)
+      )
 
       delete queuedUpdatesData[contractName]
-      writeFileSync(queuedUpdatesPath, JSON.stringify(queuedUpdatesData))
+      await fsPromises.writeFile(
+        queuedUpdatesPath,
+        JSON.stringify(queuedUpdatesData)
+      )
       console.log('')
     }
     console.log('Finished all deployments: setting data to current deployments')
-    writeFileSync(deploymentsPath, JSON.stringify(tmpDeploymentsJsonData))
+    await fsPromises.writeFile(
+      deploymentsPath,
+      JSON.stringify(tmpDeploymentsJsonData)
+    )
     // removing tmp file
-    unlinkSync(tmpDeploymentsPath)
+    await fsPromises.unlink(tmpDeploymentsPath)
 
     return await verifyCurrentImplementations()
   }
@@ -641,7 +650,7 @@ export const initUpgrades = (
       const contractName = _contractName as ContractNames
       data.contracts[contractName].implBuildInfo = ''
     }
-    writeFileSync(path, JSON.stringify(data))
+    await fsPromises.writeFile(path, JSON.stringify(data))
   }
 
   const verifyDeployments = async () => {

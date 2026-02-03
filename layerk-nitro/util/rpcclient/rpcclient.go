@@ -130,15 +130,19 @@ type limitedArgumentsMarshal struct {
 }
 
 func (m limitedArgumentsMarshal) String() string {
-	res := "["
-	for i, arg := range m.args {
-		res += limitedMarshal{m.limit, arg}.String()
-		if i < len(m.args)-1 {
-			res += ", "
-		}
+	if len(m.args) == 0 {
+		return "[]"
 	}
-	res += "]"
-	return res
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, arg := range m.args {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(limitedMarshal{m.limit, arg}.String())
+	}
+	b.WriteByte(']')
+	return b.String()
 }
 
 // IsAlreadyKnownError returns true if the error appears to be an "already known" (GETH) error or "AlreadyKnown" (Nethermind) error.
@@ -155,11 +159,12 @@ func (c *RpcClient) CallContext(ctx_in context.Context, result interface{}, meth
 	if c.client == nil {
 		return errors.New("not connected")
 	}
+	cfg := c.config()
 	logId := c.logId.Add(1)
-	log.Trace("sending RPC request", "method", method, "logId", logId, "args", limitedArgumentsMarshal{c.config().ArgLogLimit, args})
+	log.Trace("sending RPC request", "method", method, "logId", logId, "args", limitedArgumentsMarshal{cfg.ArgLogLimit, args})
 	var err error
-	for i := uint(0); i < c.config().Retries+1; i++ {
-		retryDelay := c.config().RetryDelay
+	for i := uint(0); i < cfg.Retries+1; i++ {
+		retryDelay := cfg.RetryDelay
 		if i > 0 && retryDelay > 0 {
 			select {
 			case <-ctx_in.Done():
@@ -172,7 +177,7 @@ func (c *RpcClient) CallContext(ctx_in context.Context, result interface{}, meth
 		}
 		var ctx context.Context
 		var cancelCtx context.CancelFunc
-		timeout := c.config().Timeout
+		timeout := cfg.Timeout
 		if timeout > 0 {
 			ctx, cancelCtx = context.WithTimeout(ctx_in, timeout)
 		} else {
@@ -182,7 +187,7 @@ func (c *RpcClient) CallContext(ctx_in context.Context, result interface{}, meth
 
 		cancelCtx()
 		logger := log.Trace
-		limit := c.config().ArgLogLimit
+		limit := cfg.ArgLogLimit
 		if err != nil && !IsAlreadyKnownError(err) {
 			logger = log.Info
 		}
@@ -205,7 +210,7 @@ func (c *RpcClient) CallContext(ctx_in context.Context, result interface{}, meth
 		if errors.Is(err, context.DeadlineExceeded) {
 			continue
 		}
-		retryErrs := c.config().retryErrors
+		retryErrs := cfg.retryErrors
 		if retryErrs != nil && retryErrs.MatchString(err.Error()) {
 			continue
 		}

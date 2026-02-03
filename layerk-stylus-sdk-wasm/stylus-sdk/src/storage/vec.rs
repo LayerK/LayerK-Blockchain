@@ -192,10 +192,11 @@ impl<S: StorageType> StorageVec<S> {
 
     /// Removes and returns an accessor to the last element of the vector, if any.
     pub fn shrink(&mut self) -> Option<StorageGuardMut<S>> {
-        let index = match self.len() {
-            0 => return None,
-            x => x - 1,
-        };
+        let len = self.len();
+        if len == 0 {
+            return None;
+        }
+        let index = len - 1;
         unsafe {
             self.set_len(index);
             Some(StorageGuardMut::new(self.accessor_unchecked(index)))
@@ -246,8 +247,15 @@ impl<'a, S: SimpleStorageType<'a>> StorageVec<S> {
     ///
     /// Note: the underlying storage slot is erased when all elements in a word are freed.
     pub fn pop(&mut self) -> Option<S::Wraps<'a>> {
-        let store = unsafe { self.shrink()?.into_raw() };
-        let index = self.len();
+        let len = self.len();
+        if len == 0 {
+            return None;
+        }
+        let index = len - 1;
+        unsafe {
+            self.set_len(index);
+        }
+        let store = unsafe { self.accessor_unchecked(index) };
         let value = store.into();
         let first = index % self.density() == 0;
 
@@ -265,10 +273,11 @@ impl<'a, S: SimpleStorageType<'a>> StorageVec<S> {
 impl<S: Erase> StorageVec<S> {
     /// Removes and erases the last element of the vector.
     pub fn erase_last(&mut self) {
-        if self.is_empty() {
+        let len = self.len();
+        if len == 0 {
             return;
         }
-        let index = self.len() - 1;
+        let index = len - 1;
         unsafe {
             self.accessor_unchecked(index).erase();
             self.set_len(index);
@@ -278,7 +287,8 @@ impl<S: Erase> StorageVec<S> {
 
 impl<S: Erase> Erase for StorageVec<S> {
     fn erase(&mut self) {
-        for i in 0..self.len() {
+        let len = self.len();
+        for i in 0..len {
             let mut store = unsafe { self.accessor_unchecked(i) };
             store.erase()
         }

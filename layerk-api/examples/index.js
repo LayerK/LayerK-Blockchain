@@ -3,6 +3,7 @@ const axios = require('axios');
 const baseUrl = 'https://explorer.layerk.com/api/v2';
 const address = '0xE01B9E7A53629D23ee7571A3cF05C3188883f35e';
 const lykDecimals = 18n;
+const lykDivisor = 10n ** lykDecimals;
 
 const api = axios.create({
   baseURL: baseUrl,
@@ -14,8 +15,8 @@ function formatBalance(raw) {
     return '0';
   }
   const value = BigInt(raw);
-  const whole = value / 10n ** lykDecimals;
-  const fraction = value % 10n ** lykDecimals;
+  const whole = value / lykDivisor;
+  const fraction = value % lykDivisor;
   const paddedFraction = fraction.toString().padStart(Number(lykDecimals), '0');
   return `${whole}.${paddedFraction.replace(/0+$/, '') || '0'}`;
 }
@@ -47,7 +48,7 @@ async function getBalance(targetAddress) {
 }
 
 async function getLYKTransactions(targetAddress) {
-  const transactions = [];
+  let totalTransfers = 0;
   let nextPageParams = null;
 
   try {
@@ -66,26 +67,23 @@ async function getLYKTransactions(targetAddress) {
           return;
         }
         if (tx.tx_types.includes('coin_transfer')) {
-          transactions.push(tx);
+          totalTransfers += 1;
+          const timestamp = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : 'Unknown';
+          const value = formatBalance(tx.value || 0);
+          console.log(
+            `Date: ${timestamp}\nTx Hash: ${tx.hash}\nFrom: ${tx.from?.hash}\nTo: ${tx.to?.hash}\nValue: ${value} LYK\n---`
+          );
         }
       });
 
       nextPageParams = data.next_page_params || null;
     } while (nextPageParams);
 
-    console.log(`Found ${transactions.length} LYK coin transfer transactions`);
-    transactions.forEach((tx) => {
-      const timestamp = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : 'Unknown';
-      const value = formatBalance(tx.value || 0);
-      console.log(
-        `Date: ${timestamp}\nTx Hash: ${tx.hash}\nFrom: ${tx.from?.hash}\nTo: ${tx.to?.hash}\nValue: ${value} LYK\n---`
-      );
-    });
-
-    return transactions;
+    console.log(`Found ${totalTransfers} LYK coin transfer transactions`);
+    return totalTransfers;
   } catch (error) {
     logError('Error getting transactions', error);
-    return [];
+    return 0;
   }
 }
 
