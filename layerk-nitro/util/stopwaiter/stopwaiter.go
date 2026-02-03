@@ -112,9 +112,7 @@ func (s *StopWaiterSafe) StopAndWait() error {
 func getAllStackTraces() string {
 	buf := make([]byte, 64*1024*1024)
 	size := runtime.Stack(buf, true)
-	builder := strings.Builder{}
-	builder.Write(buf[0:size])
-	return builder.String()
+	return string(buf[:size])
 }
 
 func (s *StopWaiterSafe) stopAndWaitImpl(warningTimeout time.Duration) error {
@@ -139,7 +137,9 @@ func (s *StopWaiterSafe) stopAndWaitImpl(warningTimeout time.Duration) error {
 		log.Warn("taking too long to stop", "name", s.name, "delay[s]", warningTimeout.Seconds())
 		log.Warn(traces)
 	case <-waitChan:
-		timer.Stop()
+		if !timer.Stop() {
+			<-timer.C
+		}
 		return nil
 	}
 	<-waitChan

@@ -1,6 +1,7 @@
 package timeboost
 
 import (
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,34 +39,49 @@ func (bc *bidCache) size() int {
 
 }
 
+type rankedBid struct {
+	bid  *ValidatedBid
+	hash *big.Int
+}
+
+func betterBid(candidate, current *rankedBid) bool {
+	if current == nil || current.bid == nil {
+		return true
+	}
+	amountCmp := candidate.bid.Amount.Cmp(current.bid.Amount)
+	if amountCmp != 0 {
+		return amountCmp > 0
+	}
+	return candidate.hash.Cmp(current.hash) > 0
+}
+
 // topTwoBids returns the top two bids in the cache.
 func (bc *bidCache) topTwoBids() *auctionResult {
 	bc.RLock()
 	defer bc.RUnlock()
 
-	result := &auctionResult{}
-
+	var first *rankedBid
+	var second *rankedBid
 	for _, bid := range bc.bidsByExpressLaneControllerAddr {
-		if result.firstPlace == nil {
-			result.firstPlace = bid
-		} else if bid.Amount.Cmp(result.firstPlace.Amount) > 0 {
-			result.secondPlace = result.firstPlace
-			result.firstPlace = bid
-		} else if bid.Amount.Cmp(result.firstPlace.Amount) == 0 {
-			if bid.BigIntHash(bc.auctionContractDomainSeparator).Cmp(result.firstPlace.BigIntHash(bc.auctionContractDomainSeparator)) > 0 {
-				result.secondPlace = result.firstPlace
-				result.firstPlace = bid
-			} else if result.secondPlace == nil || bid.BigIntHash(bc.auctionContractDomainSeparator).Cmp(result.secondPlace.BigIntHash(bc.auctionContractDomainSeparator)) > 0 {
-				result.secondPlace = bid
-			}
-		} else if result.secondPlace == nil || bid.Amount.Cmp(result.secondPlace.Amount) > 0 {
-			result.secondPlace = bid
-		} else if bid.Amount.Cmp(result.secondPlace.Amount) == 0 {
-			if bid.BigIntHash(bc.auctionContractDomainSeparator).Cmp(result.secondPlace.BigIntHash(bc.auctionContractDomainSeparator)) > 0 {
-				result.secondPlace = bid
-			}
+		bidHash := bid.BigIntHash(bc.auctionContractDomainSeparator)
+		candidate := &rankedBid{bid: bid, hash: bidHash}
+
+		if betterBid(candidate, first) {
+			second = first
+			first = candidate
+			continue
+		}
+		if betterBid(candidate, second) {
+			second = candidate
 		}
 	}
 
+	result := &auctionResult{}
+	if first != nil {
+		result.firstPlace = first.bid
+	}
+	if second != nil {
+		result.secondPlace = second.bid
+	}
 	return result
 }

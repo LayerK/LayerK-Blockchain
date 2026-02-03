@@ -127,24 +127,15 @@ func loadEnvironmentVariables(k *koanf.Koanf) error {
 	envPrefix := k.String("conf.env-prefix")
 	if len(envPrefix) != 0 {
 		return k.Load(env.ProviderWithValue(envPrefix+"_", ".", func(key string, v string) (string, interface{}) {
-			// FOO__BAR -> foo-bar to handle dash in config names
-			key = strings.ReplaceAll(strings.ToLower(
-				strings.TrimPrefix(key, envPrefix+"_")), "__", "-")
-			key = strings.ReplaceAll(key, "_", ".")
+			key = normalizeEnvKey(envPrefix, key)
 
 			if value, found := envvarsToSplitOnComma[key]; found {
 				// If there are commas in the value, split the value into a slice.
 				if _, ok := value.(time.Duration); ok {
 					// Special case for time.Duration
-					// v[1:len(v)-1] removes the '[' , ']' around the string
-					durationStrings := strings.Split(v[1:len(v)-1], ",")
-					var durations []time.Duration
-					for _, durationString := range durationStrings {
-						duration, err := time.ParseDuration(durationString)
-						if err != nil {
-							return key, nil
-						}
-						durations = append(durations, duration)
+					durations, ok := parseDurationList(v)
+					if !ok {
+						return key, nil
 					}
 					return key, durations
 				}
@@ -159,6 +150,37 @@ func loadEnvironmentVariables(k *koanf.Koanf) error {
 	}
 
 	return nil
+}
+
+func normalizeEnvKey(envPrefix, key string) string {
+	// FOO__BAR -> foo-bar to handle dash in config names
+	trimmed := strings.TrimPrefix(key, envPrefix+"_")
+	normalized := strings.ReplaceAll(strings.ToLower(trimmed), "__", "-")
+	return strings.ReplaceAll(normalized, "_", ".")
+}
+
+func parseDurationList(value string) ([]time.Duration, bool) {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) == 0 {
+		return nil, false
+	}
+	if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+		trimmed = strings.TrimSuffix(strings.TrimPrefix(trimmed, "["), "]")
+	}
+	trimmed = strings.TrimSpace(trimmed)
+	if trimmed == "" {
+		return []time.Duration{}, true
+	}
+	parts := strings.Split(trimmed, ",")
+	durations := make([]time.Duration, 0, len(parts))
+	for _, part := range parts {
+		duration, err := time.ParseDuration(strings.TrimSpace(part))
+		if err != nil {
+			return nil, false
+		}
+		durations = append(durations, duration)
+	}
+	return durations, true
 }
 
 func loadS3Variables(k *koanf.Koanf) error {

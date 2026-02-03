@@ -4,8 +4,8 @@
 package jsonapi
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
 	"strconv"
 )
 
@@ -13,8 +13,7 @@ import (
 type Uint64String uint64
 
 func (u *Uint64String) UnmarshalJSON(b []byte) error {
-	jsonString := string(b)
-	if jsonString == "null" {
+	if bytes.Equal(b, []byte("null")) {
 		return nil
 	}
 
@@ -34,5 +33,9 @@ func (u *Uint64String) UnmarshalJSON(b []byte) error {
 }
 
 func (u Uint64String) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("\"%d\"", uint64(u))), nil
+	buf := make([]byte, 0, 24)
+	buf = append(buf, '"')
+	buf = strconv.AppendUint(buf, uint64(u), 10)
+	buf = append(buf, '"')
+	return buf, nil
 }

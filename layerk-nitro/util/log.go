@@ -41,23 +41,29 @@ func NewEphemeralErrorHandler(duration time.Duration, errorString string, ignore
 //	ephemeralErrorHandler.Loglevel(err, log.Error)("msg", "key1", val1, "key2", val2)
 //	ephemeralErrorHandler.Loglevel(err, log.Error)("msg", "key1", val1)
 func (h *EphemeralErrorHandler) LogLevel(err error, currentLogLevel func(msg string, ctx ...interface{})) func(string, ...interface{}) {
+	if err == nil {
+		h.Reset()
+		return currentLogLevel
+	}
 	if h.ErrorString != "" && !strings.Contains(err.Error(), h.ErrorString) {
 		h.Reset()
 		return currentLogLevel
 	}
 
-	if h.FirstOccurrence.Equal((time.Time{})) {
-		*h.FirstOccurrence = time.Now()
+	now := time.Now()
+	if h.FirstOccurrence.Equal(time.Time{}) {
+		*h.FirstOccurrence = now
 	}
 
-	if h.IgnoreDuration != 0 && time.Since(*h.FirstOccurrence) < h.IgnoreDuration {
+	elapsed := now.Sub(*h.FirstOccurrence)
+	if h.IgnoreDuration != 0 && elapsed < h.IgnoreDuration {
 		if h.IgnoredErrLogLevel != nil {
 			return h.IgnoredErrLogLevel
 		}
 		return log.Debug
 	}
 
-	if time.Since(*h.FirstOccurrence) < h.Duration {
+	if elapsed < h.Duration {
 		return log.Warn
 	}
 	return log.Error
