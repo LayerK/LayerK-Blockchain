@@ -23,15 +23,43 @@ const IMPLEMENTATION_SLOT =
   '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
 
 const ROLLUP_CONSTRUCTOR_VAL = 42161
+
+const readJsonFile = async <T>(path: string): Promise<T> => {
+  const jsonBuff = await fsPromises.readFile(path)
+  return JSON.parse(jsonBuff.toString()) as T
+}
+
+const writeJsonFile = async (path: string, data: unknown) => {
+  await fsPromises.writeFile(path, JSON.stringify(data))
+}
+
+const confirmAction = async (message: string, initial = true) => {
+  const res = await prompts({
+    type: 'confirm',
+    name: 'value',
+    message,
+    initial,
+  })
+  return Boolean(res.value)
+}
+
+const normalizeStorageAddress = (
+  hre: HardhatRuntimeEnvironment,
+  storageValue: string
+) => {
+  const hex = storageValue.startsWith('0x')
+    ? storageValue.slice(2)
+    : storageValue
+  const trimmed = hex.slice(-40).padStart(40, '0')
+  return hre.ethers.utils.getAddress(`0x${trimmed}`)
+}
+
 export const getAdminFromProxyStorage = async (
   hre: HardhatRuntimeEnvironment,
   proxyAddress: string
 ) => {
-  let admin = await hre.ethers.provider.getStorageAt(proxyAddress, ADMIN_SLOT)
-  if (admin.length > 42) {
-    admin = '0x' + admin.substr(admin.length - 40, 40)
-  }
-  return admin
+  const admin = await hre.ethers.provider.getStorageAt(proxyAddress, ADMIN_SLOT)
+  return normalizeStorageAddress(hre, admin)
 }
 
 const POST_UPGRADE_INIT_SIG = '0x95fcea78'
@@ -72,36 +100,44 @@ export const initUpgrades = (
   verifyDeployments: () => Promise<void>
 } => {
   const compileTask = hre.run('compile')
+  let networkPromise:
+    | ReturnType<HardhatRuntimeEnvironment['ethers']['provider']['getNetwork']>
+    | undefined
+  const getNetwork = async () => {
+    if (!networkPromise) {
+      networkPromise = hre.ethers.provider.getNetwork()
+    }
+    return networkPromise
+  }
+  const getChainId = async () => (await getNetwork()).chainId
 
   const getQueuedUpdates = async (): Promise<{
     path: string
     data: QueuedUpdates
   }> => {
-    const network = await hre.ethers.provider.getNetwork()
-    const path = `${rootDir}/_deployments/${network.chainId}_queued-updates.json`
+    const chainId = await getChainId()
+    const path = `${rootDir}/_deployments/${chainId}_queued-updates.json`
     if (!existsSync(path)) {
       console.log('New network; creating queued updates file')
-      await fsPromises.writeFile(path, JSON.stringify({}))
+      await writeJsonFile(path, {})
       return { path, data: {} }
     }
-    const jsonBuff = await fsPromises.readFile(path)
-    return { path, data: JSON.parse(jsonBuff.toString()) as QueuedUpdates }
+    return { path, data: await readJsonFile<QueuedUpdates>(path) }
   }
 
   const getDeployments = async (): Promise<{
     path: string
     data: CurrentDeployments
   }> => {
-    const network = await hre.ethers.provider.getNetwork()
-    const path = `${rootDir}/_deployments/${network.chainId}_current_deployment.json`
+    const chainId = await getChainId()
+    const path = `${rootDir}/_deployments/${chainId}_current_deployment.json`
     if (!existsSync(path)) {
       console.log('New network; need to set up _current_deployments.json file')
       throw Error('No current deployments')
     }
-    const jsonBuff = await fsPromises.readFile(path)
     return {
       path,
-      data: JSON.parse(jsonBuff.toString()) as CurrentDeployments,
+      data: await readJsonFile<CurrentDeployments>(path),
     }
   }
 
@@ -115,15 +151,15 @@ export const initUpgrades = (
 
     console.log('Creating a new tmp deployments file:')
     const path = await tmpDeploymentsPath()
-    await fsPromises.writeFile(path, JSON.stringify(currentDeployments))
+    await writeJsonFile(path, currentDeployments)
     return {
       path,
       data: currentDeployments,
     }
   }
   const tmpDeploymentsPath = async () => {
-    const network = await hre.ethers.provider.getNetwork()
-    return `${rootDir}/_deployments/${network.chainId}_tmp_deployment.json`
+    const chainId = await getChainId()
+    return `${rootDir}/_deployments/${chainId}_tmp_deployment.json`
   }
 
   const loadTmpDeployments = async (): Promise<
@@ -137,21 +173,16 @@ export const initUpgrades = (
     if (existsSync(path)) {
       console.log(``)
 
-      const res = await prompts({
-        type: 'confirm',
-        name: 'value',
-        message:
-          'tmp deployments file found; do you want to resume deployments with it?',
-        initial: true,
-      })
-      if (!res.value) {
+      const confirmed = await confirmAction(
+        'tmp deployments file found; do you want to resume deployments with it?'
+      )
+      if (!confirmed) {
         console.log('exiting')
         process.exit(0)
       }
-      const jsonBuff = await fsPromises.readFile(path)
       return {
         path,
-        data: JSON.parse(jsonBuff.toString()) as CurrentDeployments,
+        data: await readJsonFile<CurrentDeployments>(path),
       }
     }
   }
@@ -188,13 +219,10 @@ export const initUpgrades = (
     for (const contractName of contractNames) {
       if (queuedUpdatesData[contractName]) {
         console.log()
-        const res = await prompts({
-          type: 'confirm',
-          name: 'value',
-          message: `Update already queued up for ${contractName}; would you redeploy it? ('Yes' to redeploy, otherwise we'll skip and used the queued update)`,
-          initial: true,
-        })
-        if (!res.value) {
+        const confirmed = await confirmAction(
+          `Update already queued up for ${contractName}; would you redeploy it?`
+        )
+        if (!confirmed) {
           console.log('Skipping redeploy and using the queued update')
           continue
         } else {
@@ -241,7 +269,7 @@ export const initUpgrades = (
       console.log(receipt)
       console.log('')
 
-      await fsPromises.writeFile(path, JSON.stringify(queuedUpdatesData))
+      await writeJsonFile(path, queuedUpdatesData)
     }
   }
 
@@ -401,23 +429,14 @@ export const initUpgrades = (
       console.log('Setting new tmp: deployment data')
 
       tmpDeploymentsJsonData.contracts[contractName] = newDeploymentData
-      await fsPromises.writeFile(
-        tmpDeploymentsPath,
-        JSON.stringify(tmpDeploymentsJsonData)
-      )
+      await writeJsonFile(tmpDeploymentsPath, tmpDeploymentsJsonData)
 
       delete queuedUpdatesData[contractName]
-      await fsPromises.writeFile(
-        queuedUpdatesPath,
-        JSON.stringify(queuedUpdatesData)
-      )
+      await writeJsonFile(queuedUpdatesPath, queuedUpdatesData)
       console.log('')
     }
     console.log('Finished all deployments: setting data to current deployments')
-    await fsPromises.writeFile(
-      deploymentsPath,
-      JSON.stringify(tmpDeploymentsJsonData)
-    )
+    await writeJsonFile(deploymentsPath, tmpDeploymentsJsonData)
     // removing tmp file
     await fsPromises.unlink(tmpDeploymentsPath)
 
@@ -622,12 +641,10 @@ export const initUpgrades = (
       )
     }
 
-    console.log(
-      `You are about to transfer owner ship of ${upgradableBeaconAddress} to ${newOwner}. You sure? ('Yes' to proceeed)`
+    const confirmed = await confirmAction(
+      `You are about to transfer ownership of ${upgradableBeaconAddress} to ${newOwner}. Proceed?`
     )
-
-    const confirm = await prompt('')
-    if (confirm !== 'Yes') {
+    if (!confirmed) {
       console.log('Cancelling')
       return
     }
@@ -637,11 +654,10 @@ export const initUpgrades = (
   }
 
   const removeBuildInfoFiles = async () => {
-    console.log(
-      `You sure you want to remove build info files for the current network's current_deployments file? You might want to make sure they're backed up first.  ('Yes' to continue)`
+    const confirmed = await confirmAction(
+      `Remove build info files for the current network's current_deployments file?`
     )
-    const res = await prompt('')
-    if (res !== 'Yes') {
+    if (!confirmed) {
       console.log('exiting')
       process.exit(0)
     }
@@ -650,7 +666,7 @@ export const initUpgrades = (
       const contractName = _contractName as ContractNames
       data.contracts[contractName].implBuildInfo = ''
     }
-    await fsPromises.writeFile(path, JSON.stringify(data))
+    await writeJsonFile(path, data)
   }
 
   const verifyDeployments = async () => {

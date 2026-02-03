@@ -51,6 +51,39 @@ import { _getScaledAmount } from './local-deployment/localDeploymentLib'
  */
 const ADDRESS_DEAD = '0x000000000000000000000000000000000000dEaD'
 
+const gasPriceCache = new WeakMap<
+  ethers.providers.Provider,
+  Promise<BigNumber>
+>()
+const networkCache = new WeakMap<
+  ethers.providers.Provider,
+  Promise<ethers.providers.Network>
+>()
+
+const getGasPriceCached = async (
+  provider: ethers.providers.Provider
+): Promise<BigNumber> => {
+  const cached = gasPriceCache.get(provider)
+  if (cached) {
+    return cached
+  }
+  const gasPricePromise = provider.getGasPrice()
+  gasPriceCache.set(provider, gasPricePromise)
+  return gasPricePromise
+}
+
+const getNetworkCached = async (
+  provider: ethers.providers.Provider
+): Promise<ethers.providers.Network> => {
+  const cached = networkCache.get(provider)
+  if (cached) {
+    return cached
+  }
+  const networkPromise = provider.getNetwork()
+  networkCache.set(provider, networkPromise)
+  return networkPromise
+}
+
 /**
  * Use already deployed L1TokenBridgeCreator to create and init token bridge contracts.
  * Function first gets estimates for 2 retryable tickets - one for deploying L2 factory and
@@ -70,7 +103,7 @@ export const createTokenBridge = async (
   rollupAddress: string,
   rollupOwnerAddress: string
 ) => {
-  const gasPrice = await l2Provider.getGasPrice()
+  const gasPrice = await getGasPriceCached(l2Provider)
 
   //// run retryable estimate for deploying L2 factory
   const deployFactoryGasParams = await getEstimateForDeployingFactory(
@@ -466,8 +499,11 @@ export const deployL1TokenBridgeCreator = async (
   ///// verify contracts
   if (verifyContracts) {
     console.log('\n\n Start contract verification \n\n')
+    const chainId = (
+      await getNetworkCached(l1Deployer.provider!)
+    ).chainId
     const l1Verifier = new ContractVerifier(
-      (await l1Deployer.provider!.getNetwork()).chainId,
+      chainId,
       process.env.ARBISCAN_API_KEY!
     )
     const abi = ethers.utils.defaultAbiCoder

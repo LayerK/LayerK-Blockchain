@@ -23,6 +23,13 @@ const LOCALHOST_L3_OWNER_KEY =
 
 const dockerContainerCache: Record<string, string> = {}
 
+class DockerContainerNotFoundError extends Error {
+  constructor(filter: string) {
+    super(`Docker container not found for filter "${filter}". Is it running?`)
+    this.name = 'DockerContainerNotFoundError'
+  }
+}
+
 const getDockerContainerName = (filter: string) => {
   if (dockerContainerCache[filter]) {
     return dockerContainerCache[filter]
@@ -32,6 +39,9 @@ const getDockerContainerName = (filter: string) => {
   )
     .toString()
     .trim()
+  if (!container) {
+    throw new DockerContainerNotFoundError(filter)
+  }
   dockerContainerCache[filter] = container
   return container
 }
@@ -357,7 +367,15 @@ export async function _getScaledAmount(
   amount: BigNumber,
   provider: ethers.providers.Provider
 ): Promise<BigNumber> {
-  const decimals = await ERC20__factory.connect(feeToken, provider).decimals()
+  let decimals = 18
+  try {
+    decimals = await ERC20__factory.connect(feeToken, provider).decimals()
+  } catch (err) {
+    console.warn(
+      `Failed to fetch decimals for fee token ${feeToken}; defaulting to 18.`,
+      err
+    )
+  }
   if (decimals === 18) {
     return amount
   }

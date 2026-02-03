@@ -21,6 +21,13 @@ export const deploy1820Registry = async (signer: SignerWithAddress) => {
         to: ERC1820_REGISTRY_DEPLOYER,
         value: requiredBalance,
       })
+      const codeAfterFunding = await ethers.provider.getCode(
+        ERC1820_REGISTRY_ADDRESS
+      )
+      if (codeAfterFunding !== '0x') {
+        console.log('Registry deployed by another process')
+        return
+      }
       await ethers.provider.sendTransaction(ERC1820_REGISTRY_DEPLOYMENT_TX)
       console.log('Deployed registry')
     } else {

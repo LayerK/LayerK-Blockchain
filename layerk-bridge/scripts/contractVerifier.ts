@@ -1,4 +1,6 @@
 import { spawn } from 'child_process'
+
+const VERIFY_TIMEOUT_MS = 120_000
 export class ContractVerifier {
   chainId: number
   apiKey: string = ''
@@ -100,20 +102,42 @@ export class ContractVerifier {
 
     const command = `forge ${args.join(' ')}`
     const child = spawn('forge', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
     let stderr = ''
+    let timedOut = false
+    const timeout = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+    }, VERIFY_TIMEOUT_MS)
+
+    child.stdout.on('data', chunk => {
+      stdout += chunk.toString()
+    })
     child.stderr.on('data', chunk => {
       stderr += chunk.toString()
     })
 
     child.on('error', err => {
+      clearTimeout(timeout)
       console.log('-----------------')
       console.log(command)
       console.log('Failed to submit for verification', contractAddress, err)
     })
 
     child.on('close', code => {
+      clearTimeout(timeout)
       console.log('-----------------')
       console.log(command)
+      if (stdout.trim()) {
+        console.log(stdout.trim())
+      }
+      if (timedOut) {
+        console.log(
+          `Verification timed out after ${VERIFY_TIMEOUT_MS}ms`,
+          contractAddress
+        )
+        return
+      }
       if (code !== 0) {
         console.log(
           'Failed to submit for verification',

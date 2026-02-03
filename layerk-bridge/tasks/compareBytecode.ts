@@ -7,7 +7,12 @@ import fs from "fs";
 
 task("compareBytecode", "Compares deployed bytecode with local builds")
     .addParam("contractAddrs", "A comma-separated list of deployed contract addresses")
-    .setAction(async ({ contractAddrs }, hre) => {
+    .addFlag("strict", "Require exact bytecode match and skip heuristic matching")
+    .addFlag(
+        "allowUnlinkedLibs",
+        "Allow heuristic matching even in strict mode"
+    )
+    .setAction(async ({ contractAddrs, strict, allowUnlinkedLibs }, hre) => {
         const addresses = contractAddrs.split(',');
 
         // Build a lookup map of deployed bytecode hashes to contract names.
@@ -49,6 +54,13 @@ task("compareBytecode", "Compares deployed bytecode with local builds")
             if (matches && matches.length > 0) {
                 console.log(
                     `Contract Address ${trimmed} matches with ${matches.join(", ")}`
+                );
+                continue;
+            }
+
+            if (strict && !allowUnlinkedLibs) {
+                console.log(
+                    `Strict mode: no exact bytecode match found for ${trimmed}`
                 );
                 continue;
             }
