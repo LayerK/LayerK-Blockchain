@@ -137,6 +137,7 @@ export class ContractVerifier {
       })
 
       child.once('error', err => {
+        if (settled) return
         clearTimeout(timeout)
         console.log('-----------------')
         console.log(safeCommand)
@@ -145,6 +146,7 @@ export class ContractVerifier {
       })
 
       child.once('close', code => {
+        if (settled) return
         clearTimeout(timeout)
         console.log('-----------------')
         console.log(safeCommand)
