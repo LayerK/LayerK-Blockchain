@@ -30,7 +30,9 @@ const readJsonFile = async <T>(path: string): Promise<T> => {
 }
 
 const writeJsonFile = async (path: string, data: unknown) => {
-  await fsPromises.writeFile(path, JSON.stringify(data))
+  const tmpPath = `${path}.tmp`
+  await fsPromises.writeFile(tmpPath, JSON.stringify(data, null, 2) + '\n')
+  await fsPromises.rename(tmpPath, path)
 }
 
 const confirmAction = async (message: string, initial = true) => {
@@ -64,17 +66,26 @@ export const getAdminFromProxyStorage = async (
 
 const POST_UPGRADE_INIT_SIG = '0x95fcea78'
 
-const currentCommit = childProcess
-  .execSync('git rev-parse HEAD')
-  .toString()
-  .trim()
+const execGit = (args: string[]) =>
+  childProcess.execFileSync('git', args, { encoding: 'utf8' }).trim()
+
+const currentCommit = (() => {
+  try {
+    return execGit(['rev-parse', 'HEAD'])
+  } catch {
+    return 'unknown'
+  }
+})()
 
 const ensureCleanGitTree = () => {
-  const tree = childProcess.execSync('git diff-index HEAD --').toString().trim()
-  const found = tree.split('\n').find(diff => diff.includes('contracts'))
-  if (found) {
+  const contractsDiff = execGit(['status', '--porcelain', '--', 'contracts'])
+  if (contractsDiff) {
+    const firstChangedPath = contractsDiff
+      .split('\n')
+      .map(line => line.trim())
+      .find(Boolean)
     throw new Error(
-      `You have local changes to ${found}. Commit/stash/ get rid of them`
+      `You have local changes to ${firstChangedPath}. Commit/stash/remove them before deploying`
     )
   }
 }
@@ -103,6 +114,7 @@ export const initUpgrades = (
   let networkPromise:
     | ReturnType<HardhatRuntimeEnvironment['ethers']['provider']['getNetwork']>
     | undefined
+  let currentLayerPromise: Promise<1 | 2> | undefined
   const getNetwork = async () => {
     if (!networkPromise) {
       networkPromise = hre.ethers.provider.getNetwork()
@@ -110,6 +122,14 @@ export const initUpgrades = (
     return networkPromise
   }
   const getChainId = async () => (await getNetwork()).chainId
+  const getCurrentLayer = async (): Promise<1 | 2> => {
+    if (!currentLayerPromise) {
+      currentLayerPromise = hre.ethers.provider
+        .getCode('0x0000000000000000000000000000000000000064')
+        .then(code => (code.length > 2 ? 2 : 1))
+    }
+    return currentLayerPromise
+  }
 
   const getQueuedUpdates = async (): Promise<{
     path: string
@@ -231,14 +251,7 @@ export const initUpgrades = (
       }
 
       const layerOfContract = getLayer(contractName)
-      const currentLayer =
-        (
-          await hre.ethers.provider.getCode(
-            '0x0000000000000000000000000000000000000064'
-          )
-        ).length > 2
-          ? 2
-          : 1
+      const currentLayer = await getCurrentLayer()
       if (layerOfContract !== currentLayer) {
         throw new Error(
           `Warning: trying to deploy ${contractName} onto the wrong layer!`
@@ -584,8 +597,10 @@ export const initUpgrades = (
 
   const transferAdmin = async (proxyAddress: string, newAdmin: string) => {
     await compileTask
+    const normalizedProxyAddress = hre.ethers.utils.getAddress(proxyAddress)
+    const normalizedNewAdmin = hre.ethers.utils.getAddress(newAdmin)
 
-    const proxyAdminAddr = await getAdminFromProxyStorage(hre, proxyAddress)
+    const proxyAdminAddr = await getAdminFromProxyStorage(hre, normalizedProxyAddress)
     const ProxyAdmin__factory = await hre.ethers.getContractFactory(
       'ProxyAdmin'
     )
@@ -594,7 +609,7 @@ export const initUpgrades = (
     )
     const proxyAdminOwner = await proxyAdmin.owner()
 
-    if (newAdmin.toLowerCase() === proxyAdminOwner.toLowerCase()) {
+    if (normalizedNewAdmin.toLowerCase() === proxyAdminOwner.toLowerCase()) {
       throw new Error('User trying to update admin to current admin address')
     }
 
@@ -612,7 +627,7 @@ export const initUpgrades = (
 
     const res = await proxyAdmin
       .connect(signer)
-      .changeProxyAdmin(proxyAddress, newAdmin)
+      .changeProxyAdmin(normalizedProxyAddress, normalizedNewAdmin)
     await res.wait()
   }
 
@@ -621,6 +636,10 @@ export const initUpgrades = (
     newOwner: string
   ) => {
     await compileTask
+    const normalizedBeaconAddress = hre.ethers.utils.getAddress(
+      upgradableBeaconAddress
+    )
+    const normalizedNewOwner = hre.ethers.utils.getAddress(newOwner)
     const signers = await hre.ethers.getSigners()
     if (!signers.length) {
       throw new Error(
@@ -631,7 +650,7 @@ export const initUpgrades = (
     const UpgradeableBeacon = (
       await hre.ethers.getContractFactory('UpgradeableBeacon')
     )
-      .attach(upgradableBeaconAddress)
+      .attach(normalizedBeaconAddress)
       .connect(signer)
 
     const beaconOwner = await UpgradeableBeacon.owner()
@@ -642,13 +661,13 @@ export const initUpgrades = (
     }
 
     const confirmed = await confirmAction(
-      `You are about to transfer ownership of ${upgradableBeaconAddress} to ${newOwner}. Proceed?`
+      `You are about to transfer ownership of ${normalizedBeaconAddress} to ${normalizedNewOwner}. Proceed?`
     )
     if (!confirmed) {
       console.log('Cancelling')
       return
     }
-    const res = await UpgradeableBeacon.transferOwnership(newOwner)
+    const res = await UpgradeableBeacon.transferOwnership(normalizedNewOwner)
     await res.wait()
     console.log('ownership transfer complete')
   }
