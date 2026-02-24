@@ -2,26 +2,42 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/http"
+	"net/url"
+	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
-const rpcURL = "https://mainnet-rpc.layerk.com"
-const pollInterval = 5 * time.Second
+const defaultRPCURL = "https://mainnet-rpc.layerk.com"
+const defaultPollInterval = 5 * time.Second
+const defaultRequestTimeout = 10 * time.Second
+const defaultMaxBlocksPerPoll = 128
 
-var httpClient = &http.Client{
-	Timeout: 10 * time.Second,
-}
+var addressRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
 
-// Addresses to monitor
-var addressesToMonitor = []string{
+var defaultAddressesToMonitor = []string{
 	"0xE01B9E7A53629D23ee7571A3cF05C3188883f35e",
 	"0xDe96e7Ed414943Ebb73aE64B517166Ad22e39729",
 }
+
+var rpcURL = loadRPCURL()
+var pollInterval = loadDurationEnvMillis("POLL_INTERVAL_MS", defaultPollInterval)
+var requestTimeout = loadDurationEnvMillis("REQUEST_TIMEOUT_MS", defaultRequestTimeout)
+var maxBlocksPerPoll = loadPositiveIntEnv("MAX_BLOCKS_PER_POLL", defaultMaxBlocksPerPoll)
+
+var httpClient = &http.Client{
+	Timeout: requestTimeout,
+}
+
+// Addresses to monitor
+var addressesToMonitor = loadMonitoredAddresses()
 
 var monitoredSet = func() map[string]struct{} {
 	set := make(map[string]struct{}, len(addressesToMonitor))
@@ -30,6 +46,83 @@ var monitoredSet = func() map[string]struct{} {
 	}
 	return set
 }()
+
+func loadPositiveIntEnv(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		fmt.Printf("Invalid %s=%q; using default %d\n", name, raw, fallback)
+		return fallback
+	}
+	return value
+}
+
+func loadDurationEnvMillis(name string, fallback time.Duration) time.Duration {
+	ms := loadPositiveIntEnv(name, int(fallback/time.Millisecond))
+	return time.Duration(ms) * time.Millisecond
+}
+
+func loadRPCURL() string {
+	raw := strings.TrimSpace(os.Getenv("LAYERK_RPC_URL"))
+	if raw == "" {
+		return defaultRPCURL
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		fmt.Printf("Invalid LAYERK_RPC_URL=%q; using default %s\n", raw, defaultRPCURL)
+		return defaultRPCURL
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		fmt.Printf("Unsupported LAYERK_RPC_URL scheme %q; using default %s\n", parsed.Scheme, defaultRPCURL)
+		return defaultRPCURL
+	}
+	return parsed.String()
+}
+
+func loadMonitoredAddresses() []string {
+	raw := strings.TrimSpace(os.Getenv("MONITORED_ADDRESSES"))
+	candidates := defaultAddressesToMonitor
+	if raw != "" {
+		candidates = strings.Split(raw, ",")
+	}
+
+	result := make([]string, 0, len(candidates))
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		address := strings.ToLower(strings.TrimSpace(candidate))
+		if address == "" {
+			continue
+		}
+		if !addressRegex.MatchString(address) {
+			fmt.Printf("Skipping invalid monitored address: %s\n", candidate)
+			continue
+		}
+		if _, ok := seen[address]; ok {
+			continue
+		}
+		seen[address] = struct{}{}
+		result = append(result, address)
+	}
+
+	if len(result) == 0 {
+		fmt.Println("No valid MONITORED_ADDRESSES configured; falling back to defaults")
+		for _, candidate := range defaultAddressesToMonitor {
+			address := strings.ToLower(candidate)
+			if _, ok := seen[address]; ok {
+				continue
+			}
+			seen[address] = struct{}{}
+			result = append(result, address)
+		}
+	}
+
+	return result
+}
 
 type rpcResponse struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -70,7 +163,10 @@ func makeRPCRequest(method string, params []interface{}, result interface{}) err
 	}
 
 	// Make the HTTP POST request
-	req, err := http.NewRequest(http.MethodPost, rpcURL, bytes.NewBuffer(data))
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rpcURL, bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
@@ -188,6 +284,14 @@ func checkBlock(blockNumberHex string) error {
 
 func main() {
 	var lastBlockNumberHex string
+	fmt.Printf(
+		"Monitoring %d address(es) via %s (poll=%s timeout=%s maxBlocksPerPoll=%d)\n",
+		len(monitoredSet),
+		rpcURL,
+		pollInterval,
+		requestTimeout,
+		maxBlocksPerPoll,
+	)
 
 	for {
 		// Get the latest block number
@@ -220,13 +324,25 @@ func main() {
 				continue
 			}
 
-			// Check all new blocks since the last known block
-			for i := new(big.Int).Add(lastBlockNum, big.NewInt(1)); i.Cmp(currentBlockNum) <= 0; i.Add(i, big.NewInt(1)) {
-				blockNumberHex := "0x" + i.Text(16)
-				if err := checkBlock(blockNumberHex); err != nil {
-					fmt.Printf("Error checking block %s: %v\n", blockNumberHex, err)
+				startBlockNum := new(big.Int).Set(lastBlockNum)
+				diff := new(big.Int).Sub(currentBlockNum, lastBlockNum)
+				maxRange := big.NewInt(int64(maxBlocksPerPoll))
+				if diff.Cmp(maxRange) > 0 {
+					startBlockNum = new(big.Int).Sub(currentBlockNum, maxRange)
+					fmt.Printf(
+						"Backlog detected (%s blocks). Processing only the latest %d blocks this cycle.\n",
+						diff.String(),
+						maxBlocksPerPoll,
+					)
 				}
-			}
+
+				// Check new blocks since the last known (bounded by maxBlocksPerPoll)
+				for i := new(big.Int).Add(startBlockNum, big.NewInt(1)); i.Cmp(currentBlockNum) <= 0; i.Add(i, big.NewInt(1)) {
+					blockNumberHex := "0x" + i.Text(16)
+					if err := checkBlock(blockNumberHex); err != nil {
+						fmt.Printf("Error checking block %s: %v\n", blockNumberHex, err)
+					}
+				}
 
 			lastBlockNumberHex = currentBlockNumberHex
 		}
