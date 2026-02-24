@@ -67,6 +67,13 @@ export class ContractVerifier {
     constructorArgs?: string,
     _numOfOptimization?: number
   ) {
+    if (!this.apiKey) {
+      throw new Error('Missing explorer API key for contract verification')
+    }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(contractAddress)) {
+      throw new Error(`Invalid contract address: ${contractAddress}`)
+    }
+
     // avoid rate limiting
     await new Promise(resolve => setTimeout(resolve, 1000))
 
@@ -100,53 +107,70 @@ export class ContractVerifier {
       this.apiKey
     )
 
-    const command = `forge ${args.join(' ')}`
-    const child = spawn('forge', args, { stdio: ['ignore', 'pipe', 'pipe'] })
-    let stdout = ''
-    let stderr = ''
-    let timedOut = false
-    const timeout = setTimeout(() => {
-      timedOut = true
-      child.kill('SIGKILL')
-    }, VERIFY_TIMEOUT_MS)
+    const safeCommand = `forge ${args
+      .map(arg => (arg === this.apiKey ? '[REDACTED]' : arg))
+      .join(' ')}`
 
-    child.stdout.on('data', chunk => {
-      stdout += chunk.toString()
-    })
-    child.stderr.on('data', chunk => {
-      stderr += chunk.toString()
-    })
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn('forge', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      let stdout = ''
+      let stderr = ''
+      let timedOut = false
+      let settled = false
 
-    child.on('error', err => {
-      clearTimeout(timeout)
-      console.log('-----------------')
-      console.log(command)
-      console.log('Failed to submit for verification', contractAddress, err)
-    })
-
-    child.on('close', code => {
-      clearTimeout(timeout)
-      console.log('-----------------')
-      console.log(command)
-      if (stdout.trim()) {
-        console.log(stdout.trim())
+      const finish = (handler: () => void) => {
+        if (settled) return
+        settled = true
+        handler()
       }
-      if (timedOut) {
-        console.log(
-          `Verification timed out after ${VERIFY_TIMEOUT_MS}ms`,
-          contractAddress
-        )
-        return
-      }
-      if (code !== 0) {
-        console.log(
-          'Failed to submit for verification',
-          contractAddress,
-          stderr.trim()
-        )
-      } else {
+
+      const timeout = setTimeout(() => {
+        timedOut = true
+        child.kill('SIGKILL')
+      }, VERIFY_TIMEOUT_MS)
+
+      child.stdout.on('data', chunk => {
+        stdout += chunk.toString()
+      })
+      child.stderr.on('data', chunk => {
+        stderr += chunk.toString()
+      })
+
+      child.once('error', err => {
+        clearTimeout(timeout)
+        console.log('-----------------')
+        console.log(safeCommand)
+        console.log('Failed to submit for verification', contractAddress, err)
+        finish(() => reject(err))
+      })
+
+      child.once('close', code => {
+        clearTimeout(timeout)
+        console.log('-----------------')
+        console.log(safeCommand)
+        if (stdout.trim()) {
+          console.log(stdout.trim())
+        }
+        if (timedOut) {
+          const err = new Error(
+            `Verification timed out after ${VERIFY_TIMEOUT_MS}ms for ${contractAddress}`
+          )
+          console.log(err.message)
+          finish(() => reject(err))
+          return
+        }
+        if (code !== 0) {
+          const err = new Error(
+            `Failed to submit for verification ${contractAddress}: ${stderr.trim()}`
+          )
+          console.log(err.message)
+          finish(() => reject(err))
+          return
+        }
+
         console.log('Successfully submitted for verification', contractAddress)
-      }
+        finish(() => resolve())
+      })
     })
   }
 }

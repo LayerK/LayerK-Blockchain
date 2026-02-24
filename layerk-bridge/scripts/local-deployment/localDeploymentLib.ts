@@ -3,7 +3,7 @@ import { JsonRpcProvider } from '@ethersproject/providers'
 import { L1Network, L2Network, addCustomNetwork } from '@arbitrum/sdk'
 import { Bridge__factory } from '@arbitrum/sdk/dist/lib/abi/factories/Bridge__factory'
 import { RollupAdminLogic__factory } from '@arbitrum/sdk/dist/lib/abi/factories/RollupAdminLogic__factory'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import {
   createTokenBridge,
   deployL1TokenBridgeCreator,
@@ -30,18 +30,50 @@ class DockerContainerNotFoundError extends Error {
   }
 }
 
+const runDocker = (args: string[]) =>
+  execFileSync('docker', args, { encoding: 'utf8' }).trim()
+
+const readDockerJson = <T>(container: string, path: string): T => {
+  try {
+    const output = execFileSync(
+      'docker',
+      ['exec', container, 'cat', path],
+      { encoding: 'utf8' }
+    )
+    return JSON.parse(output) as T
+  } catch (err) {
+    throw new Error(
+      `Failed to read JSON from docker container "${container}" at "${path}": ${String(
+        err
+      )}`
+    )
+  }
+}
+
 const getDockerContainerName = (filter: string) => {
   if (dockerContainerCache[filter]) {
     return dockerContainerCache[filter]
   }
-  const container = execSync(
-    `docker ps --filter "name=${filter}" --format "{{.Names}}"`
-  )
-    .toString()
-    .trim()
-  if (!container) {
+  const containers = runDocker([
+    'ps',
+    '--filter',
+    `name=${filter}`,
+    '--format',
+    '{{.Names}}',
+  ])
+    .split('\n')
+    .map(name => name.trim())
+    .filter(Boolean)
+
+  if (containers.length === 0) {
     throw new DockerContainerNotFoundError(filter)
   }
+  if (containers.length > 1) {
+    console.warn(
+      `Multiple docker containers matched "${filter}", using "${containers[0]}"`
+    )
+  }
+  const container = containers[0]
   dockerContainerCache[filter] = container
   return container
 }
@@ -232,15 +264,12 @@ export const getLocalNetworks = async (
 
   /// get parent chain info
   const container = getDockerContainerName('sequencer')
-  const l2DeploymentData = execSync(
-    `docker exec ${container} cat /config/deployment.json`
-  ).toString()
-  const l2Data = JSON.parse(l2DeploymentData) as {
+  const l2Data = readDockerJson<{
     bridge: string
     inbox: string
     ['sequencer-inbox']: string
     rollup: string
-  }
+  }>(container, '/config/deployment.json')
 
   const l1Network: L1Network | L2Network = {
     partnerChainID: 1337,
@@ -283,7 +312,6 @@ export const getLocalNetworks = async (
   }
 
   /// get L3 info
-  let deploymentData: string
   let data = {
     bridge: '',
     inbox: '',
@@ -293,16 +321,12 @@ export const getLocalNetworks = async (
 
   if (rollupAddress === undefined || rollupAddress === '') {
     const sequencerContainer = getDockerContainerName('l3node')
-    deploymentData = execSync(
-      `docker exec ${sequencerContainer} cat /config/l3deployment.json`
-    ).toString()
-
-    data = JSON.parse(deploymentData) as {
+    data = readDockerJson<{
       bridge: string
       inbox: string
       ['sequencer-inbox']: string
       rollup: string
-    }
+    }>(sequencerContainer, '/config/l3deployment.json')
   } else {
     const rollup = RollupAdminLogic__factory.connect(rollupAddress!, l1Provider)
     data.bridge = await rollup.bridge()
