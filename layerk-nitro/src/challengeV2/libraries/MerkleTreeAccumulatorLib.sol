@@ -114,11 +114,13 @@ library MerkleTreeAccumulatorLib {
     function root(
         bytes32[] memory me
     ) internal pure returns (bytes32) {
-        require(me.length > 0, "Empty merkle expansion");
-        require(me.length <= MAX_LEVEL, "Merkle expansion too large");
+        uint256 meLength = me.length;
+        require(meLength > 0, "Empty merkle expansion");
+        require(meLength <= MAX_LEVEL, "Merkle expansion too large");
 
         bytes32 accum = 0;
-        for (uint256 i = 0; i < me.length; i++) {
+        uint256 lastIndex = meLength - 1;
+        for (uint256 i = 0; i < meLength;) {
             bytes32 val = me[i];
             if (accum == 0) {
                 if (val != 0) {
@@ -128,7 +130,7 @@ library MerkleTreeAccumulatorLib {
                     // is the last entry
                     // otherwise the lowest level entry needs to be combined with a zero to balance the bottom
                     // level, after which zeros in the merkle extension above that will balance the rest
-                    if (i != me.length - 1) {
+                    if (i != lastIndex) {
                         accum = keccak256(abi.encodePacked(accum, bytes32(0)));
                     }
                 }
@@ -139,6 +141,9 @@ library MerkleTreeAccumulatorLib {
             } else {
                 // by definition we always complete trees by appending zeros to the right
                 accum = keccak256(abi.encodePacked(accum, bytes32(0)));
+            }
+            unchecked {
+                ++i;
             }
         }
 
@@ -163,9 +168,10 @@ library MerkleTreeAccumulatorLib {
         // that's too high to use in uint
         require(level < MAX_LEVEL, "Level too high");
         require(subtreeRoot != 0, "Cannot append empty subtree");
-        require(me.length <= MAX_LEVEL, "Merkle expansion too large");
+        uint256 meLength = me.length;
+        require(meLength <= MAX_LEVEL, "Merkle expansion too large");
 
-        if (me.length == 0) {
+        if (meLength == 0) {
             bytes32[] memory empty = new bytes32[](level + 1);
             empty[level] = subtreeRoot;
             return empty;
@@ -173,18 +179,18 @@ library MerkleTreeAccumulatorLib {
 
         // This technically isn't necessary since it would be caught by the i < level check
         // on the last loop of the for-loop below, but we add it for a clearer error message
-        require(level < me.length, "Level greater than highest level of current expansion");
+        require(level < meLength, "Level greater than highest level of current expansion");
 
         bytes32 accumHash = subtreeRoot;
         uint256 meSize = treeSize(me);
-        uint256 postSize = meSize + 2 ** level;
+        uint256 postSize = meSize + (uint256(1) << level);
 
         // if by appending the sub tree we increase the numbe of most sig bits of the size, that means
         // we'll need more space in the expansion to describe the tree, so we enlarge by one
         bytes32[] memory next = UintUtilsLib.mostSignificantBit(postSize)
             > UintUtilsLib.mostSignificantBit(meSize)
-            ? new bytes32[](me.length + 1)
-            : new bytes32[](me.length);
+            ? new bytes32[](meLength + 1)
+            : new bytes32[](meLength);
 
         // ensure we're never creating an expansion that's too big
         require(next.length <= MAX_LEVEL, "Append creates oversize tree");
@@ -192,7 +198,7 @@ library MerkleTreeAccumulatorLib {
         // loop through all the levels in self and try to append the new subtree
         // since each node has two children by appending a subtree we may complete another one
         // in the level above. So we move through the levels updating the result at each level
-        for (uint256 i = 0; i < me.length; i++) {
+        for (uint256 i = 0; i < meLength;) {
             // we can only append at the level of the smallest complete sub tree or below
             // appending above this level would mean create "holes" in the tree
             // we can find the smallest complete sub tree by looking for the first entry in the merkle expansion
@@ -220,6 +226,9 @@ library MerkleTreeAccumulatorLib {
                         accumHash = keccak256(abi.encodePacked(me[i], accumHash));
                     }
                 }
+            }
+            unchecked {
+                ++i;
             }
         }
 
@@ -279,7 +288,7 @@ library MerkleTreeAccumulatorLib {
 
         // remove the high order bits that are shared
         uint256 msb = UintUtilsLib.mostSignificantBit(startSize ^ endSize);
-        uint256 mask = (1 << (msb) + 1) - 1;
+        uint256 mask = (uint256(1) << (msb + 1)) - 1;
         uint256 y = startSize & mask;
         uint256 z = endSize & mask;
 
@@ -306,9 +315,13 @@ library MerkleTreeAccumulatorLib {
         bytes32[] memory me
     ) internal pure returns (uint256) {
         uint256 sum = 0;
-        for (uint256 i = 0; i < me.length; i++) {
+        uint256 meLength = me.length;
+        for (uint256 i = 0; i < meLength;) {
             if (me[i] != 0) {
-                sum += 2 ** i;
+                sum += uint256(1) << i;
+            }
+            unchecked {
+                ++i;
             }
         }
         return sum;
@@ -356,10 +369,12 @@ library MerkleTreeAccumulatorLib {
             require(proofIndex < proof.length, "Index out of range");
             exp = appendCompleteSubTree(exp, level, proof[proofIndex]);
 
-            uint256 numLeaves = 1 << level;
+            uint256 numLeaves = uint256(1) << level;
             size += numLeaves;
             assert(size <= postSize);
-            proofIndex++;
+            unchecked {
+                ++proofIndex;
+            }
         }
 
         // Check that the calculated root is equal to the provided post root

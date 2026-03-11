@@ -493,11 +493,12 @@ contract SequencerInbox is DelegateCallAware, GasRefundEnabled, ISequencerInbox 
     }
 
     function delayProofImpl(uint256 afterDelayedMessagesRead, DelayProof calldata delayProof) internal {
+        uint256 delayedMessagesRead = totalDelayedMessagesRead;
         // buffer update depends on new delayed messages. if none are read, no buffer update is proccessed
-        if (afterDelayedMessagesRead > totalDelayedMessagesRead) {
+        if (afterDelayedMessagesRead > delayedMessagesRead) {
             if (buffer.isUpdatable()) {
                 // delayedAcc of the 1st new delayed message
-                bytes32 delayedAcc = bridge.delayedInboxAccs(totalDelayedMessagesRead);
+                bytes32 delayedAcc = bridge.delayedInboxAccs(delayedMessagesRead);
                 // validate delayProof against the delayed accumulator
                 if (
                     !Messages.isValidDelayedAccPreimage(
@@ -636,10 +637,11 @@ contract SequencerInbox is DelegateCallAware, GasRefundEnabled, ISequencerInbox 
 
         // this msg isn't included in the current sequencer batch, but instead added to
         // the delayed messages queue that is yet to be included
+        uint256 baseFee = block.basefee;
         if (hostChainIsArbitrum) {
             // Include extra gas for the host chain's L1 gas charging
             uint256 l1Fees = ArbGasInfo(address(0x6c)).getCurrentTxL1GasFees();
-            extraGas += l1Fees / block.basefee;
+            extraGas += l1Fees / baseFee;
         }
         if (extraGas > type(uint64).max) revert ExtraGasNotUint64();
         bytes memory spendingReportMsg =

@@ -59,7 +59,7 @@ func ParseSequencerMessage(ctx context.Context, batchNum uint64, batchBlockHash 
 		MinL1Block:           binary.BigEndian.Uint64(data[16:24]),
 		MaxL1Block:           binary.BigEndian.Uint64(data[24:32]),
 		AfterDelayedMessages: binary.BigEndian.Uint64(data[32:40]),
-		Segments:             [][]byte{},
+		Segments:             make([][]byte, 0, 16),
 	}
 	payload := data[40:]
 
@@ -272,18 +272,19 @@ func (r *inboxMultiplexer) advanceSequencerMsg() {
 }
 
 func (r *inboxMultiplexer) advanceSubMsg() {
-	prevPos := r.backend.GetPositionWithinMessage()
-	r.backend.SetPositionWithinMessage(prevPos + 1)
+	r.backend.SetPositionWithinMessage(r.backend.GetPositionWithinMessage() + 1)
 }
 
 func (r *inboxMultiplexer) IsCachedSegementLast() bool {
 	seqMsg := r.cachedSequencerMessage
+	segments := seqMsg.Segments
+	segmentsLen := uint64(len(segments))
 	// we issue delayed messages until reaching afterDelayedMessages
 	if r.delayedMessagesRead < seqMsg.AfterDelayedMessages {
 		return false
 	}
-	for segmentNum := r.cachedSegmentNum + 1; segmentNum < uint64(len(seqMsg.Segments)); segmentNum++ {
-		segment := seqMsg.Segments[segmentNum]
+	for segmentNum := r.cachedSegmentNum + 1; segmentNum < segmentsLen; segmentNum++ {
+		segment := segments[segmentNum]
 		if len(segment) == 0 {
 			continue
 		}
