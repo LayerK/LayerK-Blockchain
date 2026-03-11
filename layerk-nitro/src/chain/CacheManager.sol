@@ -49,10 +49,7 @@ contract CacheManager is Initializable, DelegateCallAware {
         uint192 bid;
     }
 
-    function initialize(
-        uint64 initCacheSize,
-        uint64 initDecay
-    ) external initializer onlyDelegated {
+    function initialize(uint64 initCacheSize, uint64 initDecay) external initializer onlyDelegated {
         cacheSize = initCacheSize;
         decay = initDecay;
     }
@@ -65,17 +62,13 @@ contract CacheManager is Initializable, DelegateCallAware {
     }
 
     /// @notice Sets the intended cache size. Note that the queue may temporarily be larger.
-    function setCacheSize(
-        uint64 newSize
-    ) external onlyOwner {
+    function setCacheSize(uint64 newSize) external onlyOwner {
         cacheSize = newSize;
         emit SetCacheSize(newSize);
     }
 
     /// @notice Sets the intended decay factor. Does not modify existing bids.
-    function setDecayRate(
-        uint64 newDecay
-    ) external onlyOwner {
+    function setDecayRate(uint64 newDecay) external onlyOwner {
         decay = newDecay;
         emit SetDecayRate(newDecay);
     }
@@ -99,13 +92,13 @@ contract CacheManager is Initializable, DelegateCallAware {
     }
 
     /// @notice Evicts up to `count` programs from the cache.
-    function evictPrograms(
-        uint256 count
-    ) public onlyOwner {
+    function evictPrograms(uint256 count) public onlyOwner {
         while (bids.length() != 0 && count > 0) {
             (uint192 bid, uint64 index) = _getBid(bids.pop());
             _deleteEntry(bid, index);
-            count -= 1;
+            unchecked {
+                --count;
+            }
         }
     }
 
@@ -116,25 +109,26 @@ contract CacheManager is Initializable, DelegateCallAware {
 
     /// @notice Returns the `k` smallest entries in the cache sorted in ascending order.
     ///         If the cache have less than `k` entries, returns all entries.
-    function getSmallestEntries(
-        uint256 k
-    ) public view returns (Entry[] memory result) {
-        if (bids.length() < k) {
-            k = bids.length();
+    function getSmallestEntries(uint256 k) public view returns (Entry[] memory result) {
+        uint256 bidsLength = bids.length();
+        if (bidsLength < k) {
+            k = bidsLength;
         }
         uint256[] memory kbids = bids.smallest(k);
-        result = new Entry[](kbids.length);
-        for (uint256 i = 0; i < kbids.length; i++) {
+        uint256 kbidsLength = kbids.length;
+        result = new Entry[](kbidsLength);
+        for (uint256 i = 0; i < kbidsLength;) {
             (, uint64 index) = _getBid(kbids[i]);
             result[i] = entries[index];
+            unchecked {
+                ++i;
+            }
         }
     }
 
     /// @notice Returns the minimum bid required to cache a program of the given size.
     ///         Value returned here is the minimum bid that you can send with msg.value
-    function getMinBid(
-        uint64 size
-    ) public view returns (uint192 min) {
+    function getMinBid(uint64 size) public view returns (uint192 min) {
         if (size > cacheSize) {
             revert AsmTooLarge(size, 0, cacheSize);
         }
@@ -150,12 +144,16 @@ contract CacheManager is Initializable, DelegateCallAware {
         // for a given size, we need at most need to clear roundUp(size/MIN_CODESIZE) entries to make space
         uint256 k = (needToFree + MIN_CODESIZE - 1) / MIN_CODESIZE;
         Entry[] memory smallest = getSmallestEntries(k);
-        for (uint256 i = 0; i < smallest.length; i++) {
+        uint256 smallestLength = smallest.length;
+        for (uint256 i = 0; i < smallestLength;) {
             if (needToFree <= smallest[i].size) {
                 min = smallest[i].bid;
                 break;
             }
             needToFree -= smallest[i].size;
+            unchecked {
+                ++i;
+            }
         }
         uint256 currentDecay = _calcDecay();
         if (min < currentDecay) {
@@ -166,17 +164,13 @@ contract CacheManager is Initializable, DelegateCallAware {
 
     /// @notice Returns the minimum bid required to cache the program with given codehash.
     ///         Value returned here is the minimum bid that you can send with msg.value
-    function getMinBid(
-        bytes32 codehash
-    ) public view returns (uint192 min) {
+    function getMinBid(bytes32 codehash) public view returns (uint192 min) {
         return getMinBid(_asmSize(codehash));
     }
 
     /// @notice Returns the minimum bid required to cache the program at given address.
     ///         Value returned here is the minimum bid that you can send with msg.value
-    function getMinBid(
-        address program
-    ) external view returns (uint192 min) {
+    function getMinBid(address program) external view returns (uint192 min) {
         return getMinBid(program.codehash);
     }
 
@@ -193,9 +187,7 @@ contract CacheManager is Initializable, DelegateCallAware {
     }
 
     /// Places a bid, reverting if payment is insufficient.
-    function placeBid(
-        address program
-    ) external payable {
+    function placeBid(address program) external payable {
         if (isPaused) {
             revert BidsArePaused();
         }
@@ -212,9 +204,7 @@ contract CacheManager is Initializable, DelegateCallAware {
     /// @notice Evicts entries until enough space exists in the cache, reverting if payment is insufficient.
     ///         Returns the new amount of space available on success.
     /// @dev    Will revert for requests larger than 5Mb. Call repeatedly for more.
-    function makeSpace(
-        uint64 size
-    ) external payable returns (uint64 space) {
+    function makeSpace(uint64 size) external payable returns (uint64 space) {
         if (isPaused) {
             revert BidsArePaused();
         }
@@ -230,9 +220,7 @@ contract CacheManager is Initializable, DelegateCallAware {
     }
 
     /// @dev Converts a value to a bid by adding the time decay term.
-    function _toBid(
-        uint256 value
-    ) internal view returns (uint192 bid) {
+    function _toBid(uint256 value) internal view returns (uint192 bid) {
         uint256 _bid = value + _calcDecay();
         if (_bid > type(uint192).max) {
             revert BidTooLarge(_bid);
@@ -242,9 +230,7 @@ contract CacheManager is Initializable, DelegateCallAware {
 
     /// @dev Evicts entries until enough space exists in the cache, reverting if payment is insufficient.
     ///      Returns the bid and the index to use for insertion.
-    function _makeSpace(
-        uint64 size
-    ) internal returns (uint192 bid, uint64 index) {
+    function _makeSpace(uint64 size) internal returns (uint192 bid, uint64 index) {
         // discount historical bids by the number of seconds
         bid = _toBid(msg.value);
         index = uint64(entries.length);
@@ -262,13 +248,7 @@ contract CacheManager is Initializable, DelegateCallAware {
     }
 
     /// @dev Adds a bid
-    function _addBid(
-        uint192 bid,
-        address program,
-        bytes32 code,
-        uint64 size,
-        uint64 index
-    ) internal {
+    function _addBid(uint192 bid, address program, bytes32 code, uint64 size, uint64 index) internal {
         if (queueSize + size > cacheSize) {
             revert AsmTooLarge(size, queueSize, cacheSize);
         }
@@ -295,9 +275,7 @@ contract CacheManager is Initializable, DelegateCallAware {
     }
 
     /// @dev Gets the bid and index from a packed bid item
-    function _getBid(
-        uint256 info
-    ) internal pure returns (uint192 bid, uint64 index) {
+    function _getBid(uint256 info) internal pure returns (uint192 bid, uint64 index) {
         bid = uint192(info >> 64);
         index = uint64(info);
     }
@@ -308,17 +286,13 @@ contract CacheManager is Initializable, DelegateCallAware {
     }
 
     /// @dev Gets the size of the given program in bytes
-    function _asmSize(
-        bytes32 codehash
-    ) internal view returns (uint64) {
+    function _asmSize(bytes32 codehash) internal view returns (uint64) {
         uint32 size = ARB_WASM.codehashAsmSize(codehash);
         return uint64(size >= MIN_CODESIZE ? size : MIN_CODESIZE); // pretend it's at least 4Kb
     }
 
     /// @dev Determines whether a program is cached
-    function _isCached(
-        bytes32 codehash
-    ) internal view returns (bool) {
+    function _isCached(bytes32 codehash) internal view returns (bool) {
         return ARB_WASM_CACHE.codehashIsCached(codehash);
     }
 }
