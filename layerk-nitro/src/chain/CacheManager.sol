@@ -143,14 +143,20 @@ contract CacheManager is Initializable, DelegateCallAware {
         // size is at least MIN_CODESIZE, and vary no more than 10x right now, so we can safely assume
         // for a given size, we need at most need to clear roundUp(size/MIN_CODESIZE) entries to make space
         uint256 k = (needToFree + MIN_CODESIZE - 1) / MIN_CODESIZE;
-        Entry[] memory smallest = getSmallestEntries(k);
-        uint256 smallestLength = smallest.length;
-        for (uint256 i = 0; i < smallestLength;) {
-            if (needToFree <= smallest[i].size) {
-                min = smallest[i].bid;
+        uint256 bidsLength = bids.length();
+        if (bidsLength < k) {
+            k = bidsLength;
+        }
+        uint256[] memory kbids = bids.smallest(k);
+        uint256 kbidsLength = kbids.length;
+        for (uint256 i = 0; i < kbidsLength;) {
+            (, uint64 index) = _getBid(kbids[i]);
+            Entry memory entry = entries[index];
+            if (needToFree <= entry.size) {
+                min = entry.bid;
                 break;
             }
-            needToFree -= smallest[i].size;
+            needToFree -= entry.size;
             unchecked {
                 ++i;
             }
