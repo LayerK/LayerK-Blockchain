@@ -52,19 +52,14 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
     /// @param upperChildId             The id of the upper child created during bisection
     /// @param lowerChildAlreadyExists  When an edge is bisected the lower child may already exist - created by a rival.
     event EdgeBisected(
-        bytes32 indexed edgeId,
-        bytes32 indexed lowerChildId,
-        bytes32 indexed upperChildId,
-        bool lowerChildAlreadyExists
+        bytes32 indexed edgeId, bytes32 indexed lowerChildId, bytes32 indexed upperChildId, bool lowerChildAlreadyExists
     );
 
     /// @notice An edge can be confirmed if the cumulative time (in blocks) unrivaled of it and a direct chain of ancestors is greater than a threshold
     /// @param edgeId               The edge that was confirmed
     /// @param mutualId             The mutual id of the confirmed edge
     /// @param totalTimeUnrivaled   The cumulative amount of time (in blocks) this edge spent unrivaled
-    event EdgeConfirmedByTime(
-        bytes32 indexed edgeId, bytes32 indexed mutualId, uint256 totalTimeUnrivaled
-    );
+    event EdgeConfirmedByTime(bytes32 indexed edgeId, bytes32 indexed mutualId, uint256 totalTimeUnrivaled);
 
     /// @notice A SmallStep edge of length 1 can be confirmed via a one step proof
     /// @param edgeId   The edge that was confirmed
@@ -81,9 +76,7 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
     /// @param mutualId     The mutual id of the confirmed edge
     /// @param stakeToken   The ERC20 being refunded
     /// @param stakeAmount  The amount of tokens being refunded
-    event EdgeRefunded(
-        bytes32 indexed edgeId, bytes32 indexed mutualId, address stakeToken, uint256 stakeAmount
-    );
+    event EdgeRefunded(bytes32 indexed edgeId, bytes32 indexed mutualId, address stakeToken, uint256 stakeAmount);
 
     /// @dev Store for all edges and rival data
     ///      All edges, including edges from different challenges, are stored together in the same store
@@ -194,9 +187,7 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
     /////////////////////////////
 
     /// @inheritdoc IEdgeChallengeManager
-    function createLayerZeroEdge(
-        CreateEdgeArgs calldata args
-    ) external returns (bytes32) {
+    function createLayerZeroEdge(CreateEdgeArgs calldata args) external returns (bytes32) {
         // Check if whitelist is enabled in the Rollup
         // We only enforce whitelist in this function as it may exhaust resources
         bool whitelistEnabled = !assertionChain.validatorWhitelistDisabled();
@@ -215,17 +206,11 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
             if (args.proof.length == 0) {
                 revert EmptyEdgeSpecificProof();
             }
-            (
-                ,
-                AssertionStateData memory predecessorStateData,
-                AssertionStateData memory claimStateData
-            ) = abi.decode(args.proof, (bytes32[], AssertionStateData, AssertionStateData));
+            (, AssertionStateData memory predecessorStateData, AssertionStateData memory claimStateData) =
+                abi.decode(args.proof, (bytes32[], AssertionStateData, AssertionStateData));
 
             assertionChain.validateAssertionHash(
-                args.claimId,
-                claimStateData.assertionState,
-                claimStateData.prevAssertionHash,
-                claimStateData.inboxAcc
+                args.claimId, claimStateData.assertionState, claimStateData.prevAssertionHash, claimStateData.inboxAcc
             );
 
             assertionChain.validateAssertionHash(
@@ -236,9 +221,7 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
             );
 
             if (args.endHistoryRoot != claimStateData.assertionState.endHistoryRoot) {
-                revert EndHistoryRootMismatch(
-                    args.endHistoryRoot, claimStateData.assertionState.endHistoryRoot
-                );
+                revert EndHistoryRootMismatch(args.endHistoryRoot, claimStateData.assertionState.endHistoryRoot);
             }
 
             ard = AssertionReferenceData(
@@ -284,16 +267,12 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function bisectEdge(
-        bytes32 edgeId,
-        bytes32 bisectionHistoryRoot,
-        bytes calldata prefixProof
-    ) external returns (bytes32, bytes32) {
-        (
-            bytes32 lowerChildId,
-            EdgeAddedData memory lowerChildAdded,
-            EdgeAddedData memory upperChildAdded
-        ) = store.bisectEdge(edgeId, bisectionHistoryRoot, prefixProof);
+    function bisectEdge(bytes32 edgeId, bytes32 bisectionHistoryRoot, bytes calldata prefixProof)
+        external
+        returns (bytes32, bytes32)
+    {
+        (bytes32 lowerChildId, EdgeAddedData memory lowerChildAdded, EdgeAddedData memory upperChildAdded) =
+            store.bisectEdge(edgeId, bisectionHistoryRoot, prefixProof);
 
         bool lowerChildAlreadyExists = lowerChildAdded.edgeId == 0;
         // the lower child might already exist, if it didnt then a new
@@ -328,34 +307,29 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function multiUpdateTimeCacheByChildren(
-        bytes32[] calldata edgeIds,
-        uint256 maximumCachedTime
-    ) public {
-        if (edgeIds.length == 0) revert EmptyArray();
+    function multiUpdateTimeCacheByChildren(bytes32[] calldata edgeIds, uint256 maximumCachedTime) public {
+        uint256 edgeCount = edgeIds.length;
+        if (edgeCount == 0) revert EmptyArray();
         // revert early if the last edge already has sufficient time
-        store.validateCurrentTimer(edgeIds[edgeIds.length - 1], maximumCachedTime);
-        for (uint256 i = 0; i < edgeIds.length; i++) {
+        store.validateCurrentTimer(edgeIds[edgeCount - 1], maximumCachedTime);
+        for (uint256 i = 0; i < edgeCount;) {
             updateTimerCacheByChildren(edgeIds[i], type(uint256).max);
+            unchecked {
+                ++i;
+            }
         }
     }
 
     /// @inheritdoc IEdgeChallengeManager
     function updateTimerCacheByChildren(bytes32 edgeId, uint256 maximumCachedTime) public {
-        (bool updated, uint256 newValue) =
-            store.updateTimerCacheByChildren(edgeId, maximumCachedTime);
+        (bool updated, uint256 newValue) = store.updateTimerCacheByChildren(edgeId, maximumCachedTime);
         if (updated) emit TimerCacheUpdated(edgeId, newValue);
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function updateTimerCacheByClaim(
-        bytes32 edgeId,
-        bytes32 claimingEdgeId,
-        uint256 maximumCachedTime
-    ) public {
-        (bool updated, uint256 newValue) = store.updateTimerCacheByClaim(
-            edgeId, claimingEdgeId, NUM_BIGSTEP_LEVEL, maximumCachedTime
-        );
+    function updateTimerCacheByClaim(bytes32 edgeId, bytes32 claimingEdgeId, uint256 maximumCachedTime) public {
+        (bool updated, uint256 newValue) =
+            store.updateTimerCacheByClaim(edgeId, claimingEdgeId, NUM_BIGSTEP_LEVEL, maximumCachedTime);
         if (updated) emit TimerCacheUpdated(edgeId, newValue);
     }
 
@@ -370,8 +344,7 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
         // if the edge is block level and the assertion being claimed against was the first child of its predecessor
         // then we are able to count the time between the first and second child as time towards
         // the this edge
-        bool isBlockLevel =
-            ChallengeEdgeLib.levelToType(topEdge.level, NUM_BIGSTEP_LEVEL) == EdgeType.Block;
+        bool isBlockLevel = ChallengeEdgeLib.levelToType(topEdge.level, NUM_BIGSTEP_LEVEL) == EdgeType.Block;
         if (isBlockLevel && assertionChain.isFirstChild(topEdge.claimId)) {
             assertionChain.validateAssertionHash(
                 topEdge.claimId,
@@ -379,13 +352,11 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
                 claimStateData.prevAssertionHash,
                 claimStateData.inboxAcc
             );
-            assertionBlocks = assertionChain.getSecondChildCreationBlock(
-                claimStateData.prevAssertionHash
-            ) - assertionChain.getFirstChildCreationBlock(claimStateData.prevAssertionHash);
+            assertionBlocks = assertionChain.getSecondChildCreationBlock(claimStateData.prevAssertionHash)
+                - assertionChain.getFirstChildCreationBlock(claimStateData.prevAssertionHash);
         }
 
-        uint256 totalTimeUnrivaled =
-            store.confirmEdgeByTime(edgeId, assertionBlocks, challengePeriodBlocks);
+        uint256 totalTimeUnrivaled = store.confirmEdgeByTime(edgeId, assertionBlocks, challengePeriodBlocks);
 
         emit EdgeConfirmedByTime(edgeId, store.edges[edgeId].mutualId(), totalTimeUnrivaled);
     }
@@ -424,9 +395,7 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function refundStake(
-        bytes32 edgeId
-    ) public {
+    function refundStake(bytes32 edgeId) public {
         ChallengeEdge storage edge = store.get(edgeId);
         // setting refunded also do checks that the edge cannot be refunded twice
         edge.setRefunded();
@@ -445,9 +414,7 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
     // VIEW ONLY SECTION //
     ///////////////////////
     /// @inheritdoc IEdgeChallengeManager
-    function getLayerZeroEndHeight(
-        EdgeType eType
-    ) public view returns (uint256) {
+    function getLayerZeroEndHeight(EdgeType eType) public view returns (uint256) {
         if (eType == EdgeType.Block) {
             return LAYERZERO_BLOCKEDGE_HEIGHT;
         } else if (eType == EdgeType.BigStep) {
@@ -468,9 +435,7 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
         uint256 endHeight,
         bytes32 endHistoryRoot
     ) public pure returns (bytes32) {
-        return ChallengeEdgeLib.idComponent(
-            level, originId, startHeight, startHistoryRoot, endHeight, endHistoryRoot
-        );
+        return ChallengeEdgeLib.idComponent(level, originId, startHeight, startHistoryRoot, endHeight, endHistoryRoot);
     }
 
     /// @inheritdoc IEdgeChallengeManager
@@ -481,79 +446,56 @@ contract EdgeChallengeManager is IEdgeChallengeManager, Initializable {
         bytes32 startHistoryRoot,
         uint256 endHeight
     ) public pure returns (bytes32) {
-        return ChallengeEdgeLib.mutualIdComponent(
-            level, originId, startHeight, startHistoryRoot, endHeight
-        );
+        return ChallengeEdgeLib.mutualIdComponent(level, originId, startHeight, startHistoryRoot, endHeight);
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function edgeExists(
-        bytes32 edgeId
-    ) public view returns (bool) {
+    function edgeExists(bytes32 edgeId) public view returns (bool) {
         return store.edges[edgeId].exists();
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function getEdge(
-        bytes32 edgeId
-    ) public view returns (ChallengeEdge memory) {
+    function getEdge(bytes32 edgeId) public view returns (ChallengeEdge memory) {
         return store.get(edgeId);
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function edgeLength(
-        bytes32 edgeId
-    ) public view returns (uint256) {
+    function edgeLength(bytes32 edgeId) public view returns (uint256) {
         return store.get(edgeId).length();
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function hasRival(
-        bytes32 edgeId
-    ) public view returns (bool) {
+    function hasRival(bytes32 edgeId) public view returns (bool) {
         return store.hasRival(edgeId);
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function confirmedRival(
-        bytes32 mutualId
-    ) public view returns (bytes32) {
+    function confirmedRival(bytes32 mutualId) public view returns (bytes32) {
         return store.confirmedRivals[mutualId];
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function hasLengthOneRival(
-        bytes32 edgeId
-    ) public view returns (bool) {
+    function hasLengthOneRival(bytes32 edgeId) public view returns (bool) {
         return store.hasLengthOneRival(edgeId);
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function timeUnrivaled(
-        bytes32 edgeId
-    ) public view returns (uint256) {
+    function timeUnrivaled(bytes32 edgeId) public view returns (uint256) {
         return store.timeUnrivaled(edgeId);
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function getPrevAssertionHash(
-        bytes32 edgeId
-    ) public view returns (bytes32) {
+    function getPrevAssertionHash(bytes32 edgeId) public view returns (bytes32) {
         return store.getPrevAssertionHash(edgeId);
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function firstRival(
-        bytes32 mutualId
-    ) public view returns (bytes32) {
+    function firstRival(bytes32 mutualId) public view returns (bytes32) {
         return store.firstRivals[mutualId];
     }
 
     /// @inheritdoc IEdgeChallengeManager
-    function hasMadeLayerZeroRival(
-        address account,
-        bytes32 mutualId
-    ) external view returns (bool) {
+    function hasMadeLayerZeroRival(address account, bytes32 mutualId) external view returns (bool) {
         return store.hasMadeLayerZeroRival[account][mutualId];
     }
 }

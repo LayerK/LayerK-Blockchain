@@ -107,31 +107,16 @@ contract RollupCreator is Ownable {
      *          - dataHashReader The address of the data hash reader used to read blob hashes
      * @return The address of the newly created rollup
      */
-    function createRollup(RollupDeploymentParams memory deployParams)
-        public
-        payable
-        returns (address)
-    {
+    function createRollup(RollupDeploymentParams calldata deployParams) external payable returns (address) {
         {
             // Make sure the immutable maxDataSize is as expected
-            (, ISequencerInbox ethSequencerInbox, IInboxBase ethInbox, , ) = bridgeCreator
-                .ethBasedTemplates();
-            require(
-                deployParams.maxDataSize == ethSequencerInbox.maxDataSize(),
-                "SI_MAX_DATA_SIZE_MISMATCH"
-            );
+            (, ISequencerInbox ethSequencerInbox, IInboxBase ethInbox,,) = bridgeCreator.ethBasedTemplates();
+            require(deployParams.maxDataSize == ethSequencerInbox.maxDataSize(), "SI_MAX_DATA_SIZE_MISMATCH");
             require(deployParams.maxDataSize == ethInbox.maxDataSize(), "I_MAX_DATA_SIZE_MISMATCH");
 
-            (, ISequencerInbox erc20SequencerInbox, IInboxBase erc20Inbox, , ) = bridgeCreator
-                .erc20BasedTemplates();
-            require(
-                deployParams.maxDataSize == erc20SequencerInbox.maxDataSize(),
-                "SI_MAX_DATA_SIZE_MISMATCH"
-            );
-            require(
-                deployParams.maxDataSize == erc20Inbox.maxDataSize(),
-                "I_MAX_DATA_SIZE_MISMATCH"
-            );
+            (, ISequencerInbox erc20SequencerInbox, IInboxBase erc20Inbox,,) = bridgeCreator.erc20BasedTemplates();
+            require(deployParams.maxDataSize == erc20SequencerInbox.maxDataSize(), "SI_MAX_DATA_SIZE_MISMATCH");
+            require(deployParams.maxDataSize == erc20Inbox.maxDataSize(), "I_MAX_DATA_SIZE_MISMATCH");
         }
 
         // create proxy admin which will manage bridge contracts
@@ -148,19 +133,10 @@ contract RollupCreator is Ownable {
         );
 
         IChallengeManager challengeManager = IChallengeManager(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(challengeManagerTemplate),
-                    address(proxyAdmin),
-                    ""
-                )
-            )
+            address(new TransparentUpgradeableProxy(address(challengeManagerTemplate), address(proxyAdmin), ""))
         );
         challengeManager.initialize(
-            IChallengeResultReceiver(address(rollup)),
-            bridgeContracts.sequencerInbox,
-            bridgeContracts.bridge,
-            osp
+            IChallengeResultReceiver(address(rollup)), bridgeContracts.sequencerInbox, bridgeContracts.bridge, osp
         );
 
         // deploy and init upgrade executor
@@ -171,9 +147,10 @@ contract RollupCreator is Ownable {
 
         // initialize the rollup with this contract as owner to set batch poster and validators
         // it will transfer the ownership to the upgrade executor later
-        deployParams.config.owner = address(this);
+        Config memory config = deployParams.config;
+        config.owner = address(this);
         rollup.initializeProxy(
-            deployParams.config,
+            config,
             ContractDependencies({
                 bridge: bridgeContracts.bridge,
                 sequencerInbox: bridgeContracts.sequencerInbox,
@@ -189,29 +166,38 @@ contract RollupCreator is Ownable {
         );
 
         // Setting batch posters and batch poster manager
-        for (uint256 i = 0; i < deployParams.batchPosters.length; i++) {
-            bridgeContracts.sequencerInbox.setIsBatchPoster(deployParams.batchPosters[i], true);
+        ISequencerInbox sequencerInbox = bridgeContracts.sequencerInbox;
+        address[] calldata batchPosters = deployParams.batchPosters;
+        uint256 batchPosterCount = batchPosters.length;
+        for (uint256 i = 0; i < batchPosterCount;) {
+            sequencerInbox.setIsBatchPoster(batchPosters[i], true);
+            unchecked {
+                ++i;
+            }
         }
         if (deployParams.batchPosterManager != address(0)) {
-            bridgeContracts.sequencerInbox.setBatchPosterManager(deployParams.batchPosterManager);
+            sequencerInbox.setBatchPosterManager(deployParams.batchPosterManager);
         }
 
         // Call setValidator on the newly created rollup contract just if validator set is not empty
-        if (deployParams.validators.length != 0) {
-            bool[] memory _vals = new bool[](deployParams.validators.length);
-            for (uint256 i = 0; i < deployParams.validators.length; i++) {
+        address[] calldata validators = deployParams.validators;
+        uint256 validatorCount = validators.length;
+        if (validatorCount != 0) {
+            bool[] memory _vals = new bool[](validatorCount);
+            for (uint256 i = 0; i < validatorCount;) {
                 _vals[i] = true;
+                unchecked {
+                    ++i;
+                }
             }
-            IRollupAdmin(address(rollup)).setValidator(deployParams.validators, _vals);
+            IRollupAdmin(address(rollup)).setValidator(validators, _vals);
         }
 
         IRollupAdmin(address(rollup)).setOwner(address(upgradeExecutor));
 
         if (deployParams.deployFactoriesToL2) {
             _deployFactories(
-                address(bridgeContracts.inbox),
-                deployParams.nativeToken,
-                deployParams.maxFeePerGasForRetryables
+                address(bridgeContracts.inbox), deployParams.nativeToken, deployParams.maxFeePerGasForRetryables
             );
         }
 
@@ -232,18 +218,9 @@ contract RollupCreator is Ownable {
         return address(rollup);
     }
 
-    function _deployUpgradeExecutor(address rollupOwner, ProxyAdmin proxyAdmin)
-        internal
-        returns (address)
-    {
+    function _deployUpgradeExecutor(address rollupOwner, ProxyAdmin proxyAdmin) internal returns (address) {
         IUpgradeExecutor upgradeExecutor = IUpgradeExecutor(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(upgradeExecutorLogic),
-                    address(proxyAdmin),
-                    bytes("")
-                )
-            )
+            address(new TransparentUpgradeableProxy(address(upgradeExecutorLogic), address(proxyAdmin), bytes("")))
         );
         address[] memory executors = new address[](1);
         executors[0] = rollupOwner;
@@ -252,31 +229,21 @@ contract RollupCreator is Ownable {
         return address(upgradeExecutor);
     }
 
-    function _deployFactories(
-        address _inbox,
-        address _nativeToken,
-        uint256 _maxFeePerGas
-    ) internal {
+    function _deployFactories(address _inbox, address _nativeToken, uint256 _maxFeePerGas) internal {
         if (_nativeToken == address(0)) {
             // we need to fund 4 retryable tickets
-            uint256 cost = l2FactoriesDeployer.getDeploymentTotalCost(
-                IInboxBase(_inbox),
-                _maxFeePerGas
-            );
+            uint256 cost = l2FactoriesDeployer.getDeploymentTotalCost(IInboxBase(_inbox), _maxFeePerGas);
 
             // do it
             l2FactoriesDeployer.perform{value: cost}(_inbox, _nativeToken, _maxFeePerGas);
 
             // refund the caller
             // solhint-disable-next-line avoid-low-level-calls
-            (bool sent, ) = msg.sender.call{value: address(this).balance}("");
+            (bool sent,) = msg.sender.call{value: address(this).balance}("");
             require(sent, "Refund failed");
         } else {
             // Transfer fee token amount needed to pay for retryable fees to the inbox.
-            uint256 totalFee = l2FactoriesDeployer.getDeploymentTotalCost(
-                IInboxBase(_inbox),
-                _maxFeePerGas
-            );
+            uint256 totalFee = l2FactoriesDeployer.getDeploymentTotalCost(IInboxBase(_inbox), _maxFeePerGas);
 
             // calculate the fee amount in the native token's decimals
             uint8 decimals = ERC20(_nativeToken).decimals();
@@ -284,29 +251,17 @@ contract RollupCreator is Ownable {
             uint256 totalFeeNativeDenominated = totalFee;
             if (decimals < 18) {
                 uint256 gasCost = _maxFeePerGas * 21_000;
-                uint256 nickCreate2Cost = _scaleDownToNativeDecimals(
-                    l2FactoriesDeployer.NICK_CREATE2_VALUE() + gasCost,
-                    decimals
-                );
-                uint256 erc2470Cost = _scaleDownToNativeDecimals(
-                    l2FactoriesDeployer.ERC2470_VALUE() + gasCost,
-                    decimals
-                );
-                uint256 zoltuCreate2Cost = _scaleDownToNativeDecimals(
-                    l2FactoriesDeployer.ZOLTU_VALUE() + gasCost,
-                    decimals
-                );
-                uint256 erc1820Cost = _scaleDownToNativeDecimals(
-                    l2FactoriesDeployer.ERC1820_VALUE() + gasCost,
-                    decimals
-                );
-                totalFeeNativeDenominated =
-                    nickCreate2Cost +
-                    erc2470Cost +
-                    zoltuCreate2Cost +
-                    erc1820Cost;
+                uint256 nickCreate2Cost =
+                    _scaleDownToNativeDecimals(l2FactoriesDeployer.NICK_CREATE2_VALUE() + gasCost, decimals);
+                uint256 erc2470Cost =
+                    _scaleDownToNativeDecimals(l2FactoriesDeployer.ERC2470_VALUE() + gasCost, decimals);
+                uint256 zoltuCreate2Cost =
+                    _scaleDownToNativeDecimals(l2FactoriesDeployer.ZOLTU_VALUE() + gasCost, decimals);
+                uint256 erc1820Cost =
+                    _scaleDownToNativeDecimals(l2FactoriesDeployer.ERC1820_VALUE() + gasCost, decimals);
+                totalFeeNativeDenominated = nickCreate2Cost + erc2470Cost + zoltuCreate2Cost + erc1820Cost;
             } else if (decimals > 18) {
-                totalFeeNativeDenominated = totalFee * (10**(decimals - 18));
+                totalFeeNativeDenominated = totalFee * (10 ** (decimals - 18));
             }
 
             IERC20(_nativeToken).safeTransferFrom(msg.sender, _inbox, totalFeeNativeDenominated);
@@ -316,16 +271,12 @@ contract RollupCreator is Ownable {
         }
     }
 
-    function _scaleDownToNativeDecimals(uint256 amount, uint8 decimals)
-        internal
-        pure
-        returns (uint256)
-    {
+    function _scaleDownToNativeDecimals(uint256 amount, uint8 decimals) internal pure returns (uint256) {
         uint256 scaledAmount = amount;
         if (decimals < 18) {
-            scaledAmount = amount / (10**(18 - decimals));
+            scaledAmount = amount / (10 ** (18 - decimals));
             // round up if necessary
-            if (scaledAmount * (10**(18 - decimals)) < amount) {
+            if (scaledAmount * (10 ** (18 - decimals)) < amount) {
                 scaledAmount++;
             }
         }

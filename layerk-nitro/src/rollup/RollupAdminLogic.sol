@@ -32,20 +32,10 @@ contract RollupAdminLogic is RollupCore, IRollupAdmin, DoubleLogicUUPSUpgradeabl
         outbox = connectedContracts.outbox;
         connectedContracts.bridge.setOutbox(address(connectedContracts.outbox), true);
         rollupEventInbox = connectedContracts.rollupEventInbox;
-        connectedContracts.bridge.setDelayedInbox(
-            address(connectedContracts.rollupEventInbox),
-            true
-        );
+        connectedContracts.bridge.setDelayedInbox(address(connectedContracts.rollupEventInbox), true);
 
         connectedContracts.rollupEventInbox.rollupInitialized(config.chainId, config.chainConfig);
-        connectedContracts.sequencerInbox.addSequencerL2Batch(
-            0,
-            "",
-            1,
-            IGasRefunder(address(0)),
-            0,
-            1
-        );
+        connectedContracts.sequencerInbox.addSequencerL2Batch(0, "", 1, IGasRefunder(address(0)), 0, 1);
 
         validatorUtils = connectedContracts.validatorUtils;
         validatorWalletCreator = connectedContracts.validatorWalletCreator;
@@ -80,15 +70,14 @@ contract RollupAdminLogic is RollupCore, IRollupAdmin, DoubleLogicUUPSUpgradeabl
             ExecutionState(emptyGlobalState, MachineStatus.FINISHED),
             1 // inboxMaxCount - force the first assertion to read a message
         );
-        return
-            NodeLib.createNode(
-                state,
-                0, // challenge hash (not challengeable)
-                0, // confirm data
-                0, // prev node
-                uint64(block.number), // deadline block (not challengeable)
-                0 // initial node has a node hash of 0
-            );
+        return NodeLib.createNode(
+            state,
+            0, // challenge hash (not challengeable)
+            0, // confirm data
+            0, // prev node
+            uint64(block.number), // deadline block (not challengeable)
+            0 // initial node has a node hash of 0
+        );
     }
 
     /**
@@ -164,11 +153,15 @@ contract RollupAdminLogic is RollupCore, IRollupAdmin, DoubleLogicUUPSUpgradeabl
      * @param _val value to set in the whitelist for corresponding address
      */
     function setValidator(address[] calldata _validator, bool[] calldata _val) external override {
-        require(_validator.length > 0, "EMPTY_ARRAY");
-        require(_validator.length == _val.length, "WRONG_LENGTH");
+        uint256 validatorCount = _validator.length;
+        require(validatorCount > 0, "EMPTY_ARRAY");
+        require(validatorCount == _val.length, "WRONG_LENGTH");
 
-        for (uint256 i = 0; i < _validator.length; i++) {
+        for (uint256 i = 0; i < validatorCount;) {
             isValidator[_validator[i]] = _val[i];
+            unchecked {
+                ++i;
+            }
         }
         emit OwnerFunctionCalled(6);
     }
@@ -296,11 +289,7 @@ contract RollupAdminLogic is RollupCore, IRollupAdmin, DoubleLogicUUPSUpgradeabl
         emit OwnerFunctionCalled(23);
     }
 
-    function forceConfirmNode(
-        uint64 nodeNum,
-        bytes32 blockHash,
-        bytes32 sendRoot
-    ) external override whenPaused {
+    function forceConfirmNode(uint64 nodeNum, bytes32 blockHash, bytes32 sendRoot) external override whenPaused {
         // this skips deadline, staker and zombie validation
         confirmNode(nodeNum, blockHash, sendRoot);
         emit OwnerFunctionCalled(24);
@@ -347,24 +336,12 @@ contract RollupAdminLogic is RollupCore, IRollupAdmin, DoubleLogicUUPSUpgradeabl
 
         require(latestNodeCreated() == 0, "NON_GENESIS_NODES_EXIST");
         require(GlobalStateLib.isEmpty(assertion.beforeState.globalState), "NOT_EMPTY_BEFORE");
-        require(
-            assertion.beforeState.machineStatus == MachineStatus.FINISHED,
-            "BEFORE_MACHINE_NOT_FINISHED"
-        );
+        require(assertion.beforeState.machineStatus == MachineStatus.FINISHED, "BEFORE_MACHINE_NOT_FINISHED");
         // accessors such as state.getSendRoot not available for calldata structs, only memory
-        require(
-            assertion.afterState.globalState.bytes32Vals[1] == expectedSendRoot,
-            "NOT_ZERO_SENDROOT"
-        );
-        require(
-            assertion.afterState.globalState.u64Vals[0] == expectedInboxCount,
-            "INBOX_NOT_AT_ONE"
-        );
+        require(assertion.afterState.globalState.bytes32Vals[1] == expectedSendRoot, "NOT_ZERO_SENDROOT");
+        require(assertion.afterState.globalState.u64Vals[0] == expectedInboxCount, "INBOX_NOT_AT_ONE");
         require(assertion.afterState.globalState.u64Vals[1] == 0, "POSITION_IN_MESSAGE_NOT_ZERO");
-        require(
-            assertion.afterState.machineStatus == MachineStatus.FINISHED,
-            "AFTER_MACHINE_NOT_FINISHED"
-        );
+        require(assertion.afterState.machineStatus == MachineStatus.FINISHED, "AFTER_MACHINE_NOT_FINISHED");
         bytes32 genesisBlockHash = assertion.afterState.globalState.bytes32Vals[0];
         createNewNode(assertion, 0, expectedInboxCount, bytes32(0));
         confirmNode(1, genesisBlockHash, expectedSendRoot);
