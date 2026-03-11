@@ -324,25 +324,25 @@ func main() {
 				continue
 			}
 
-				startBlockNum := new(big.Int).Set(lastBlockNum)
-				diff := new(big.Int).Sub(currentBlockNum, lastBlockNum)
-				maxRange := big.NewInt(int64(maxBlocksPerPoll))
-				if diff.Cmp(maxRange) > 0 {
-					startBlockNum = new(big.Int).Sub(currentBlockNum, maxRange)
-					fmt.Printf(
-						"Backlog detected (%s blocks). Processing only the latest %d blocks this cycle.\n",
-						diff.String(),
-						maxBlocksPerPoll,
-					)
-				}
+            startBlockNum := new(big.Int).Set(lastBlockNum)
+            diff := new(big.Int).Sub(currentBlockNum, lastBlockNum)
+            maxRange := big.NewInt(int64(maxBlocksPerPoll))
+            if diff.Cmp(maxRange) > 0 {
+                startBlockNum = new(big.Int).Sub(currentBlockNum, maxRange)
+                fmt.Printf(
+                    "Backlog detected (%s blocks). Processing only the latest %d blocks this cycle.\n",
+                    diff.String(),
+                    maxBlocksPerPoll,
+                )
+            }
 
-				// Check new blocks since the last known (bounded by maxBlocksPerPoll)
-				for i := new(big.Int).Add(startBlockNum, big.NewInt(1)); i.Cmp(currentBlockNum) <= 0; i.Add(i, big.NewInt(1)) {
-					blockNumberHex := "0x" + i.Text(16)
-					if err := checkBlock(blockNumberHex); err != nil {
-						fmt.Printf("Error checking block %s: %v\n", blockNumberHex, err)
-					}
-				}
+            // Check new blocks since the last known (bounded by maxBlocksPerPoll)
+            for i := new(big.Int).Add(startBlockNum, big.NewInt(1)); i.Cmp(currentBlockNum) <= 0; i.Add(i, big.NewInt(1)) {
+                blockNumberHex := "0x" + i.Text(16)
+                if err := checkBlock(blockNumberHex); err != nil {
+                    fmt.Printf("Error checking block %s: %v\n", blockNumberHex, err)
+                }
+            }
 
 			lastBlockNumberHex = currentBlockNumberHex
 		}
