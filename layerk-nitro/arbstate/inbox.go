@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -190,6 +189,42 @@ const BatchSegmentKindDelayedMessages uint8 = 2
 const BatchSegmentKindAdvanceTimestamp uint8 = 3
 const BatchSegmentKindAdvanceL1BlockNumber uint8 = 4
 
+var virtualDelayedMessagesSegment = []byte{BatchSegmentKindDelayedMessages}
+
+func decodeRLPEncodedUint64(data []byte) (uint64, error) {
+	if len(data) == 0 {
+		return 0, io.ErrUnexpectedEOF
+	}
+
+	prefix := data[0]
+	switch {
+	case prefix <= 0x7f:
+		return uint64(prefix), nil
+	case prefix == 0x80:
+		return 0, nil
+	case prefix <= 0x88:
+		size := int(prefix - 0x80)
+		if len(data) < 1+size {
+			return 0, io.ErrUnexpectedEOF
+		}
+		if size == 1 && data[1] < 0x80 {
+			return 0, fmt.Errorf("non-canonical uint64 encoding")
+		}
+		if size > 0 && data[1] == 0 {
+			return 0, fmt.Errorf("non-canonical leading zero uint64 encoding")
+		}
+		var value uint64
+		for _, b := range data[1 : 1+size] {
+			value = (value << 8) | uint64(b)
+		}
+		return value, nil
+	case prefix <= 0xb7:
+		return 0, fmt.Errorf("rlp uint64 too large")
+	default:
+		return 0, fmt.Errorf("rlp uint64 must be encoded as a string")
+	}
+}
+
 // Pop returns the message from the top of the sequencer inbox and removes it from the queue.
 // Note: this does *not* return parse errors, those are transformed into invalid messages
 func (r *inboxMultiplexer) Pop(ctx context.Context) (*arbostypes.MessageWithMetadata, error) {
@@ -268,24 +303,25 @@ func (r *inboxMultiplexer) IsCachedSegementLast() bool {
 func (r *inboxMultiplexer) getNextMsg() (*arbostypes.MessageWithMetadata, error) {
 	targetSubMessage := r.backend.GetPositionWithinMessage()
 	seqMsg := r.cachedSequencerMessage
+	segments := seqMsg.Segments
+	segmentsLen := uint64(len(segments))
 	segmentNum := r.cachedSegmentNum
 	timestamp := r.cachedSegmentTimestamp
 	blockNumber := r.cachedSegmentBlockNumber
 	submessageNumber := r.cachedSubMessageNumber
 	var segment []byte
 	for {
-		if segmentNum >= uint64(len(seqMsg.Segments)) {
+		if segmentNum >= segmentsLen {
 			break
 		}
-		segment = seqMsg.Segments[segmentNum]
+		segment = segments[segmentNum]
 		if len(segment) == 0 {
 			segmentNum++
 			continue
 		}
 		segmentKind := segment[0]
 		if segmentKind == BatchSegmentKindAdvanceTimestamp || segmentKind == BatchSegmentKindAdvanceL1BlockNumber {
-			rd := bytes.NewReader(segment[1:])
-			advancing, err := rlp.NewStream(rd, 16).Uint64()
+			advancing, err := decodeRLPEncodedUint64(segment[1:])
 			if err != nil {
 				log.Warn("error parsing sequencer advancing segment", "err", err)
 				segmentNum++
@@ -318,12 +354,12 @@ func (r *inboxMultiplexer) getNextMsg() (*arbostypes.MessageWithMetadata, error)
 	} else if blockNumber > seqMsg.MaxL1Block {
 		blockNumber = seqMsg.MaxL1Block
 	}
-	if segmentNum >= uint64(len(seqMsg.Segments)) {
+	if segmentNum >= segmentsLen {
 		// after end of batch there might be "virtual" delayedMsgSegments
 		log.Warn("reading virtual delayed message segment", "delayedMessagesRead", r.delayedMessagesRead, "afterDelayedMessages", seqMsg.AfterDelayedMessages)
-		segment = []byte{BatchSegmentKindDelayedMessages}
+		segment = virtualDelayedMessagesSegment
 	} else {
-		segment = seqMsg.Segments[segmentNum]
+		segment = segments[segmentNum]
 	}
 	if len(segment) == 0 {
 		log.Error("empty sequencer message segment", "sequence", r.cachedSegmentNum, "segmentNum", segmentNum)
@@ -351,7 +387,7 @@ func (r *inboxMultiplexer) getNextMsg() (*arbostypes.MessageWithMetadata, error)
 					BlockNumber: blockNumber,
 					Timestamp:   timestamp,
 					RequestId:   nil,
-					L1BaseFee:   big.NewInt(0),
+					L1BaseFee:   common.Big0,
 				},
 				L2msg: segment,
 			},

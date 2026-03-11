@@ -116,6 +116,15 @@ func NewL1PriceData() *L1PriceData {
 	}
 }
 
+func (d *L1PriceData) reset(msgIdx arbutil.MessageIndex, callDataUnits uint64) {
+	d.startOfL1PriceDataCache = msgIdx
+	d.endOfL1PriceDataCache = msgIdx
+	d.msgToL1PriceData = append(d.msgToL1PriceData[:0], L1PriceDataOfMsg{
+		callDataUnits:            callDataUnits,
+		cummulativeCallDataUnits: callDataUnits,
+	})
+}
+
 func NewExecutionEngine(bc *core.BlockChain, syncTillBlock uint64) (*ExecutionEngine, error) {
 	return &ExecutionEngine{
 		bc:                bc,
@@ -140,19 +149,20 @@ func (s *ExecutionEngine) backlogCallDataUnits() uint64 {
 }
 
 func (s *ExecutionEngine) MarkFeedStart(to arbutil.MessageIndex) {
-	s.cachedL1PriceData.mutex.Lock()
-	defer s.cachedL1PriceData.mutex.Unlock()
+	cache := s.cachedL1PriceData
+	cache.mutex.Lock()
+	defer cache.mutex.Unlock()
 
-	if to < s.cachedL1PriceData.startOfL1PriceDataCache {
+	if to < cache.startOfL1PriceDataCache {
 		log.Debug("trying to trim older L1 price data cache which doesnt exist anymore")
-	} else if to >= s.cachedL1PriceData.endOfL1PriceDataCache {
-		s.cachedL1PriceData.startOfL1PriceDataCache = 0
-		s.cachedL1PriceData.endOfL1PriceDataCache = 0
-		s.cachedL1PriceData.msgToL1PriceData = []L1PriceDataOfMsg{}
+	} else if to >= cache.endOfL1PriceDataCache {
+		cache.startOfL1PriceDataCache = 0
+		cache.endOfL1PriceDataCache = 0
+		cache.msgToL1PriceData = cache.msgToL1PriceData[:0]
 	} else {
-		newStart := to - s.cachedL1PriceData.startOfL1PriceDataCache + 1
-		s.cachedL1PriceData.msgToL1PriceData = s.cachedL1PriceData.msgToL1PriceData[newStart:]
-		s.cachedL1PriceData.startOfL1PriceDataCache = to + 1
+		newStart := to - cache.startOfL1PriceDataCache + 1
+		cache.msgToL1PriceData = cache.msgToL1PriceData[newStart:]
+		cache.startOfL1PriceDataCache = to + 1
 	}
 }
 
@@ -874,47 +884,44 @@ func (s *ExecutionEngine) cacheL1PriceDataOfMsg(msgIdx arbutil.MessageIndex, blo
 		// s.cachedL1PriceData tracks L1 price data for messages posted by Nitro,
 		// so delayed messages should not update cummulative values kept on it.
 
-		for _, tx := range block.Transactions() {
-			_, cachedUnits := tx.GetRawCachedCalldataUnits()
+		txs := block.Transactions()
+		for i := 0; i < len(txs); i++ {
+			_, cachedUnits := txs[i].GetRawCachedCalldataUnits()
 			callDataUnits += cachedUnits
 		}
 	}
 
-	s.cachedL1PriceData.mutex.Lock()
-	defer s.cachedL1PriceData.mutex.Unlock()
+	cache := s.cachedL1PriceData
+	cache.mutex.Lock()
+	defer cache.mutex.Unlock()
 
 	resetCache := func() {
-		s.cachedL1PriceData.startOfL1PriceDataCache = msgIdx
-		s.cachedL1PriceData.endOfL1PriceDataCache = msgIdx
-		s.cachedL1PriceData.msgToL1PriceData = []L1PriceDataOfMsg{{
-			callDataUnits:            callDataUnits,
-			cummulativeCallDataUnits: callDataUnits,
-		}}
+		cache.reset(msgIdx, callDataUnits)
 	}
-	size := len(s.cachedL1PriceData.msgToL1PriceData)
+	size := len(cache.msgToL1PriceData)
 	if size == 0 ||
-		s.cachedL1PriceData.startOfL1PriceDataCache == 0 ||
-		s.cachedL1PriceData.endOfL1PriceDataCache == 0 ||
-		arbutil.MessageIndex(size) != s.cachedL1PriceData.endOfL1PriceDataCache-s.cachedL1PriceData.startOfL1PriceDataCache+1 {
+		cache.startOfL1PriceDataCache == 0 ||
+		cache.endOfL1PriceDataCache == 0 ||
+		arbutil.MessageIndex(size) != cache.endOfL1PriceDataCache-cache.startOfL1PriceDataCache+1 {
 		resetCache()
 		return
 	}
-	if msgIdx != s.cachedL1PriceData.endOfL1PriceDataCache+1 {
-		if msgIdx > s.cachedL1PriceData.endOfL1PriceDataCache+1 {
+	if msgIdx != cache.endOfL1PriceDataCache+1 {
+		if msgIdx > cache.endOfL1PriceDataCache+1 {
 			log.Info("message position higher then current end of l1 price data cache, resetting cache to this message")
 			resetCache()
-		} else if msgIdx < s.cachedL1PriceData.startOfL1PriceDataCache {
+		} else if msgIdx < cache.startOfL1PriceDataCache {
 			log.Info("message position lower than start of l1 price data cache, ignoring")
 		} else {
 			log.Info("message position already seen in l1 price data cache, ignoring")
 		}
 	} else {
-		cummulativeCallDataUnits := s.cachedL1PriceData.msgToL1PriceData[size-1].cummulativeCallDataUnits
-		s.cachedL1PriceData.msgToL1PriceData = append(s.cachedL1PriceData.msgToL1PriceData, L1PriceDataOfMsg{
+		cummulativeCallDataUnits := cache.msgToL1PriceData[size-1].cummulativeCallDataUnits
+		cache.msgToL1PriceData = append(cache.msgToL1PriceData, L1PriceDataOfMsg{
 			callDataUnits:            callDataUnits,
 			cummulativeCallDataUnits: cummulativeCallDataUnits + callDataUnits,
 		})
-		s.cachedL1PriceData.endOfL1PriceDataCache = msgIdx
+		cache.endOfL1PriceDataCache = msgIdx
 	}
 }
 
