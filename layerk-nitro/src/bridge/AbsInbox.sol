@@ -39,8 +39,7 @@ import "@openzeppelin/contracts-upgradeable/utils/StorageSlotUpgradeable.sol";
 abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase {
     /// @dev Storage slot with the admin of the contract.
     /// This is the keccak-256 hash of "eip1967.proxy.admin" subtracted by 1.
-    bytes32 internal constant _ADMIN_SLOT =
-        0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
+    bytes32 internal constant _ADMIN_SLOT = 0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
 
     /// @inheritdoc IInboxBase
     IBridge public bridge;
@@ -60,18 +59,20 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
 
     /// @inheritdoc IInboxBase
     function setAllowList(address[] memory user, bool[] memory val) external onlyRollupOrOwner {
-        require(user.length == val.length, "INVALID_INPUT");
+        uint256 userCount = user.length;
+        require(userCount == val.length, "INVALID_INPUT");
 
-        for (uint256 i = 0; i < user.length; i++) {
+        for (uint256 i = 0; i < userCount;) {
             isAllowed[user[i]] = val[i];
             emit AllowListAddressSet(user[i], val[i]);
+            unchecked {
+                ++i;
+            }
         }
     }
 
     /// @inheritdoc IInboxBase
-    function setAllowListEnabled(
-        bool _allowListEnabled
-    ) external onlyRollupOrOwner {
+    function setAllowListEnabled(bool _allowListEnabled) external onlyRollupOrOwner {
         require(_allowListEnabled != allowListEnabled, "ALREADY_SET");
         allowListEnabled = _allowListEnabled;
         emit AllowListEnabledUpdated(_allowListEnabled);
@@ -104,9 +105,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
     uint256 public immutable maxDataSize;
     uint256 internal immutable deployTimeChainId = block.chainid;
 
-    constructor(
-        uint256 _maxDataSize
-    ) {
+    constructor(uint256 _maxDataSize) {
         maxDataSize = _maxDataSize;
     }
 
@@ -125,10 +124,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
     }
 
     /* solhint-disable func-name-mixedcase */
-    function __AbsInbox_init(
-        IBridge _bridge,
-        ISequencerInbox _sequencerInbox
-    ) internal onlyInitializing {
+    function __AbsInbox_init(IBridge _bridge, ISequencerInbox _sequencerInbox) internal onlyInitializing {
         bridge = _bridge;
         sequencerInbox = _sequencerInbox;
         allowListEnabled = false;
@@ -136,9 +132,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
     }
 
     /// @inheritdoc IInboxBase
-    function sendL2MessageFromOrigin(
-        bytes calldata messageData
-    ) external whenNotPaused onlyAllowed returns (uint256) {
+    function sendL2MessageFromOrigin(bytes calldata messageData) external whenNotPaused onlyAllowed returns (uint256) {
         if (_chainIdChanged()) revert L1Forked();
         if (!CallerChecker.isCallerCodelessOrigin()) revert NotCodelessOrigin();
         if (messageData.length > maxDataSize) revert DataTooLarge(messageData.length, maxDataSize);
@@ -148,9 +142,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
     }
 
     /// @inheritdoc IInboxBase
-    function sendL2Message(
-        bytes calldata messageData
-    ) external whenNotPaused onlyAllowed returns (uint256) {
+    function sendL2Message(bytes calldata messageData) external whenNotPaused onlyAllowed returns (uint256) {
         if (_chainIdChanged()) revert L1Forked();
         return _deliverMessage(L2_MSG, msg.sender, messageData, 0);
     }
@@ -172,13 +164,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
             L2_MSG,
             msg.sender,
             abi.encodePacked(
-                L2MessageType_unsignedEOATx,
-                gasLimit,
-                maxFeePerGas,
-                nonce,
-                uint256(uint160(to)),
-                value,
-                data
+                L2MessageType_unsignedEOATx, gasLimit, maxFeePerGas, nonce, uint256(uint160(to)), value, data
             ),
             0
         );
@@ -200,12 +186,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
             L2_MSG,
             msg.sender,
             abi.encodePacked(
-                L2MessageType_unsignedContractTx,
-                gasLimit,
-                maxFeePerGas,
-                uint256(uint160(to)),
-                value,
-                data
+                L2MessageType_unsignedContractTx, gasLimit, maxFeePerGas, uint256(uint160(to)), value, data
             ),
             0
         );
@@ -232,9 +213,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
         // value params - l2CallValue, maxSubmissionCost and maxFeePerGas are denominated in child chain's native 18 decimals.
         uint256 amountToBeMintedOnL2 = _fromNativeTo18Decimals(amount);
         if (amountToBeMintedOnL2 < (maxSubmissionCost + l2CallValue + gasLimit * maxFeePerGas)) {
-            revert InsufficientValue(
-                maxSubmissionCost + l2CallValue + gasLimit * maxFeePerGas, amountToBeMintedOnL2
-            );
+            revert InsufficientValue(maxSubmissionCost + l2CallValue + gasLimit * maxFeePerGas, amountToBeMintedOnL2);
         }
 
         // if a refund address is a contract, we apply the alias to it
@@ -319,12 +298,10 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
         );
     }
 
-    function _deliverMessage(
-        uint8 _kind,
-        address _sender,
-        bytes memory _messageData,
-        uint256 amount
-    ) internal returns (uint256) {
+    function _deliverMessage(uint8 _kind, address _sender, bytes memory _messageData, uint256 amount)
+        internal
+        returns (uint256)
+    {
         if (_messageData.length > maxDataSize) {
             revert DataTooLarge(_messageData.length, maxDataSize);
         }
@@ -333,17 +310,16 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
         return msgNum;
     }
 
-    function _deliverToBridge(
-        uint8 kind,
-        address sender,
-        bytes32 messageDataHash,
-        uint256 amount
-    ) internal virtual returns (uint256);
+    function _deliverToBridge(uint8 kind, address sender, bytes32 messageDataHash, uint256 amount)
+        internal
+        virtual
+        returns (uint256);
 
-    function calculateRetryableSubmissionFee(
-        uint256 dataLength,
-        uint256 baseFee
-    ) public view virtual returns (uint256);
+    function calculateRetryableSubmissionFee(uint256 dataLength, uint256 baseFee)
+        public
+        view
+        virtual
+        returns (uint256);
 
     /// @notice get amount of ETH/token to mint on child chain based on provided value.
     ///         In case of ETH-based rollup this amount will always equal the provided
@@ -352,9 +328,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
     ///         decimals used for native currency on child chain.
     /// @dev    provided value has to be less than 'type(uint256).max/10**(18-decimalsIn)'
     ///         or otherwise it will overflow.
-    function _fromNativeTo18Decimals(
-        uint256 value
-    ) internal view virtual returns (uint256);
+    function _fromNativeTo18Decimals(uint256 value) internal view virtual returns (uint256);
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
