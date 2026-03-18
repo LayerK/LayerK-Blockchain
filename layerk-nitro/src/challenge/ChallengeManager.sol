@@ -52,15 +52,16 @@ contract ChallengeManager is DelegateCallAware, IChallengeManager {
         ChallengeModeRequirement expectedMode
     ) {
         ChallengeLib.Challenge storage challenge = challenges[challengeIndex];
-        require(msg.sender == currentResponder(challengeIndex), "CHAL_SENDER");
-        require(!isTimedOut(challengeIndex), "CHAL_DEADLINE");
+        require(msg.sender == challenge.current.addr, "CHAL_SENDER");
+        require(!challenge.isTimedOut(), "CHAL_DEADLINE");
 
+        ChallengeLib.ChallengeMode mode = challenge.mode;
         if (expectedMode == ChallengeModeRequirement.ANY) {
-            require(challenge.mode != ChallengeLib.ChallengeMode.NONE, NO_CHAL);
+            require(mode != ChallengeLib.ChallengeMode.NONE, NO_CHAL);
         } else if (expectedMode == ChallengeModeRequirement.BLOCK) {
-            require(challenge.mode == ChallengeLib.ChallengeMode.BLOCK, "CHAL_NOT_BLOCK");
+            require(mode == ChallengeLib.ChallengeMode.BLOCK, "CHAL_NOT_BLOCK");
         } else if (expectedMode == ChallengeModeRequirement.EXECUTION) {
-            require(challenge.mode == ChallengeLib.ChallengeMode.EXECUTION, "CHAL_NOT_EXECUTION");
+            require(mode == ChallengeLib.ChallengeMode.EXECUTION, "CHAL_NOT_EXECUTION");
         } else {
             assert(false);
         }
@@ -74,27 +75,27 @@ contract ChallengeManager is DelegateCallAware, IChallengeManager {
                 ),
             "BIS_STATE"
         );
-        if (
-            selection.oldSegments.length < 2 ||
-            selection.challengePosition >= selection.oldSegments.length - 1
-        ) {
+        uint256 oldSegmentsLength = selection.oldSegments.length;
+        if (oldSegmentsLength < 2 || selection.challengePosition >= oldSegmentsLength - 1) {
             revert("BAD_CHALLENGE_POS");
         }
 
         _;
 
-        if (challenge.mode == ChallengeLib.ChallengeMode.NONE) {
+        mode = challenge.mode;
+        if (mode == ChallengeLib.ChallengeMode.NONE) {
             // Early return since challenge must have terminated
             return;
         }
 
+        uint256 currentTimestamp = block.timestamp;
         ChallengeLib.Participant memory current = challenge.current;
-        current.timeLeft -= block.timestamp - challenge.lastMoveTimestamp;
+        current.timeLeft -= currentTimestamp - challenge.lastMoveTimestamp;
 
         challenge.current = challenge.next;
         challenge.next = current;
 
-        challenge.lastMoveTimestamp = block.timestamp;
+        challenge.lastMoveTimestamp = currentTimestamp;
     }
 
     function initialize(
@@ -125,6 +126,10 @@ contract ChallengeManager is DelegateCallAware, IChallengeManager {
     }
 
     function getOsp(bytes32 wasmModuleRoot) public view returns (IOneStepProofEntry) {
+        return _resolveOsp(wasmModuleRoot);
+    }
+
+    function _resolveOsp(bytes32 wasmModuleRoot) internal view returns (IOneStepProofEntry) {
         IOneStepProofEntry t = ospCond[wasmModuleRoot];
         if (address(t) == address(0)) {
             return osp;
@@ -145,12 +150,13 @@ contract ChallengeManager is DelegateCallAware, IChallengeManager {
     ) external override returns (uint64) {
         require(msg.sender == address(resultReceiver), "ONLY_ROLLUP_CHAL");
         bytes32[] memory segments = new bytes32[](2);
+        MachineStatus endMachineStatus = startAndEndMachineStatuses_[1];
         segments[0] = ChallengeLib.blockStateHash(
             startAndEndMachineStatuses_[0],
             startAndEndGlobalStates_[0].hash()
         );
         segments[1] = ChallengeLib.blockStateHash(
-            startAndEndMachineStatuses_[1],
+            endMachineStatus,
             startAndEndGlobalStates_[1].hash()
         );
 
@@ -163,8 +169,8 @@ contract ChallengeManager is DelegateCallAware, IChallengeManager {
         // See validator/assertion.go ExecutionState RequiredBatches() for reasoning
         uint64 maxInboxMessagesRead = startAndEndGlobalStates_[1].getInboxPosition();
         if (
-            startAndEndMachineStatuses_[1] == MachineStatus.ERRORED ||
-            startAndEndGlobalStates_[1].getPositionInMessage() > 0
+            endMachineStatus == MachineStatus.ERRORED
+                || startAndEndGlobalStates_[1].getPositionInMessage() > 0
         ) {
             maxInboxMessagesRead++;
         }
@@ -250,7 +256,7 @@ contract ChallengeManager is DelegateCallAware, IChallengeManager {
         }
 
         bytes32[] memory segments = new bytes32[](2);
-        IOneStepProofEntry _osp = getOsp(challenge.wasmModuleRoot);
+        IOneStepProofEntry _osp = _resolveOsp(challenge.wasmModuleRoot);
         segments[0] = _osp.getStartMachineHash(globalStateHashes[0], challenge.wasmModuleRoot);
         segments[1] = _osp.getEndMachineHash(machineStatuses[1], globalStateHashes[1]);
 
@@ -274,7 +280,7 @@ contract ChallengeManager is DelegateCallAware, IChallengeManager {
             require(challengeLength == 1, "TOO_LONG");
         }
 
-        bytes32 afterHash = getOsp(challenge.wasmModuleRoot).proveOneStep(
+        bytes32 afterHash = _resolveOsp(challenge.wasmModuleRoot).proveOneStep(
             ExecutionContext({maxInboxMessagesRead: challenge.maxInboxMessages, bridge: bridge}),
             challengeStart,
             selection.oldSegments[selection.challengePosition],
@@ -307,7 +313,8 @@ contract ChallengeManager is DelegateCallAware, IChallengeManager {
     }
 
     function isTimedOut(uint64 challengeIndex) public view virtual override returns (bool) {
-        return challenges[challengeIndex].isTimedOut();
+        ChallengeLib.Challenge storage challenge = challenges[challengeIndex];
+        return challenge.isTimedOut();
     }
 
     function requireValidBisection(

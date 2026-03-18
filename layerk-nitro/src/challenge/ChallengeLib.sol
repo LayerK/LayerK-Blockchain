@@ -70,6 +70,14 @@ library ChallengeLib {
         return keccak256(abi.encodePacked(segmentsStart, segmentsLength, segments));
     }
 
+    function hashChallengeState(
+        uint256 segmentsStart,
+        uint256 segmentsLength,
+        bytes32[] calldata segments
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(segmentsStart, segmentsLength, segments));
+    }
+
     function blockStateHash(MachineStatus status, bytes32 globalStateHash)
         internal
         pure
