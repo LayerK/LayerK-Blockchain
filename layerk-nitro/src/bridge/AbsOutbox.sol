@@ -95,11 +95,13 @@ abstract contract AbsOutbox is DelegateCallAware, IOutbox {
 
     /// @notice Allows the rollup owner to sync the rollup address
     function updateRollupAddress() external {
-        if (msg.sender != IOwnable(rollup).owner()) {
-            revert NotOwner(msg.sender, IOwnable(rollup).owner());
+        address currentRollup = rollup;
+        address currentOwner = IOwnable(currentRollup).owner();
+        if (msg.sender != currentOwner) {
+            revert NotOwner(msg.sender, currentOwner);
         }
         address newRollup = address(bridge.rollup());
-        if (rollup == newRollup) revert RollupNotChanged();
+        if (currentRollup == newRollup) revert RollupNotChanged();
         rollup = newRollup;
     }
 
@@ -244,12 +246,13 @@ abstract contract AbsOutbox is DelegateCallAware, IOutbox {
         return _isSpent(bitOffset, replay);
     }
 
-    function recordOutputAsSpent(bytes32[] memory proof, uint256 index, bytes32 item) internal {
-        if (proof.length >= 256) revert ProofTooLong(proof.length);
-        if (index >= 2 ** proof.length) revert PathNotMinimal(index, 2 ** proof.length);
+    function recordOutputAsSpent(bytes32[] calldata proof, uint256 index, bytes32 item) internal {
+        uint256 proofLength = proof.length;
+        if (proofLength >= 256) revert ProofTooLong(proofLength);
+        if (index >= 2 ** proofLength) revert PathNotMinimal(index, 2 ** proofLength);
 
         // Hash the leaf an extra time to prove it's a leaf
-        bytes32 calcRoot = calculateMerkleRoot(proof, index, item);
+        bytes32 calcRoot = MerkleLib.calculateRoot(proof, index, keccak256(abi.encodePacked(item)));
         if (roots[calcRoot] == bytes32(0)) revert UnknownRoot(calcRoot);
 
         (uint256 spentIndex, uint256 bitOffset, bytes32 replay) = _calcSpentIndexOffset(index);

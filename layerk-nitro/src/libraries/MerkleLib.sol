@@ -31,7 +31,53 @@ library MerkleLib {
         uint256 route,
         bytes32 item
     ) internal pure returns (bytes32) {
-        uint256 proofItems = nodes.length;
+        return _calculateRoot(nodes.length, route, item, nodes);
+    }
+
+    function calculateRoot(
+        bytes32[] calldata nodes,
+        uint256 route,
+        bytes32 item
+    ) internal pure returns (bytes32) {
+        return _calculateRoot(nodes.length, route, item, nodes);
+    }
+
+    function _calculateRoot(
+        uint256 proofItems,
+        uint256 route,
+        bytes32 item,
+        bytes32[] memory nodes
+    ) private pure returns (bytes32) {
+        if (proofItems > 256) revert MerkleProofTooLong(proofItems, 256);
+        bytes32 h = item;
+        for (uint256 i = 0; i < proofItems;) {
+            bytes32 node = nodes[i];
+            if ((route & (1 << i)) == 0) {
+                assembly {
+                    mstore(0x00, h)
+                    mstore(0x20, node)
+                    h := keccak256(0x00, 0x40)
+                }
+            } else {
+                assembly {
+                    mstore(0x00, node)
+                    mstore(0x20, h)
+                    h := keccak256(0x00, 0x40)
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return h;
+    }
+
+    function _calculateRoot(
+        uint256 proofItems,
+        uint256 route,
+        bytes32 item,
+        bytes32[] calldata nodes
+    ) private pure returns (bytes32) {
         if (proofItems > 256) revert MerkleProofTooLong(proofItems, 256);
         bytes32 h = item;
         for (uint256 i = 0; i < proofItems;) {
