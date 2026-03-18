@@ -45,25 +45,44 @@ library RoundTimingInfoLib {
     function currentRound(
         RoundTimingInfo memory info
     ) internal view returns (uint64) {
-        if (blockTimestampBeforeOffset(info.offsetTimestamp)) {
-            return 0;
-        }
+        return _currentRound(info.offsetTimestamp, info.roundDurationSeconds);
+    }
 
-        return (unsignedSinceTimestamp(info.offsetTimestamp)) / info.roundDurationSeconds;
+    function currentRound(
+        RoundTimingInfo storage info
+    ) internal view returns (uint64) {
+        return _currentRound(info.offsetTimestamp, info.roundDurationSeconds);
+    }
+
+    function currentRound(
+        RoundTimingInfo calldata info
+    ) internal view returns (uint64) {
+        return _currentRound(info.offsetTimestamp, info.roundDurationSeconds);
     }
 
     /// @notice Has the current auction round closed
     function isAuctionRoundClosed(
         RoundTimingInfo memory info
     ) internal view returns (bool) {
-        if (blockTimestampBeforeOffset(info.offsetTimestamp)) {
-            return false;
-        }
+        return _isAuctionRoundClosed(
+            info.offsetTimestamp, info.roundDurationSeconds, info.auctionClosingSeconds
+        );
+    }
 
-        uint64 timeSinceOffset = unsignedSinceTimestamp(info.offsetTimestamp);
-        uint64 timeInRound = timeSinceOffset % info.roundDurationSeconds;
-        // round closes at AuctionClosedSeconds before the end of the round
-        return timeInRound >= info.roundDurationSeconds - info.auctionClosingSeconds;
+    function isAuctionRoundClosed(
+        RoundTimingInfo storage info
+    ) internal view returns (bool) {
+        return _isAuctionRoundClosed(
+            info.offsetTimestamp, info.roundDurationSeconds, info.auctionClosingSeconds
+        );
+    }
+
+    function isAuctionRoundClosed(
+        RoundTimingInfo calldata info
+    ) internal view returns (bool) {
+        return _isAuctionRoundClosed(
+            info.offsetTimestamp, info.roundDurationSeconds, info.auctionClosingSeconds
+        );
     }
 
     /// @notice The reserve cannot be set during the blackout period
@@ -74,26 +93,39 @@ library RoundTimingInfoLib {
         RoundTimingInfo memory info,
         uint64 latestResolvedRound
     ) internal view returns (bool) {
-        if (blockTimestampBeforeOffset(info.offsetTimestamp)) {
-            // no rounds have started, can't be in blackout
-            return false;
-        }
+        return _isReserveBlackout(
+            info.offsetTimestamp,
+            info.roundDurationSeconds,
+            info.auctionClosingSeconds,
+            info.reserveSubmissionSeconds,
+            latestResolvedRound
+        );
+    }
 
-        // if we're in round r, we are selling the rights for r+1
-        // if the latest round is r+1 that means we've already resolved the auction in r
-        // so we are no longer in the blackout period
-        uint64 curRound = currentRound(info);
-        if (latestResolvedRound >= curRound + 1) {
-            return false;
-        }
+    function isReserveBlackout(
+        RoundTimingInfo storage info,
+        uint64 latestResolvedRound
+    ) internal view returns (bool) {
+        return _isReserveBlackout(
+            info.offsetTimestamp,
+            info.roundDurationSeconds,
+            info.auctionClosingSeconds,
+            info.reserveSubmissionSeconds,
+            latestResolvedRound
+        );
+    }
 
-        // the round in question hasnt been resolved
-        // therefore if we're within ReserveSubmissionSeconds of the auction close then we're in blackout
-        // otherwise we're not
-        uint64 timeSinceOffset = unsignedSinceTimestamp(info.offsetTimestamp);
-        uint64 timeInRound = timeSinceOffset % info.roundDurationSeconds;
-        return timeInRound
-            >= (info.roundDurationSeconds - info.auctionClosingSeconds - info.reserveSubmissionSeconds);
+    function isReserveBlackout(
+        RoundTimingInfo calldata info,
+        uint64 latestResolvedRound
+    ) internal view returns (bool) {
+        return _isReserveBlackout(
+            info.offsetTimestamp,
+            info.roundDurationSeconds,
+            info.auctionClosingSeconds,
+            info.reserveSubmissionSeconds,
+            latestResolvedRound
+        );
     }
 
     /// @notice Gets the start and end timestamps (seconds) of a specified round
@@ -107,12 +139,87 @@ library RoundTimingInfoLib {
         RoundTimingInfo memory info,
         uint64 round
     ) internal pure returns (uint64, uint64) {
-        int64 intRoundStart = info.offsetTimestamp + int64(info.roundDurationSeconds * round);
+        return _roundTimestamps(info.offsetTimestamp, info.roundDurationSeconds, round);
+    }
+
+    function roundTimestamps(
+        RoundTimingInfo storage info,
+        uint64 round
+    ) internal view returns (uint64, uint64) {
+        return _roundTimestamps(info.offsetTimestamp, info.roundDurationSeconds, round);
+    }
+
+    function roundTimestamps(
+        RoundTimingInfo calldata info,
+        uint64 round
+    ) internal pure returns (uint64, uint64) {
+        return _roundTimestamps(info.offsetTimestamp, info.roundDurationSeconds, round);
+    }
+
+    function _currentRound(
+        int64 offsetTimestamp,
+        uint64 roundDurationSeconds
+    ) private view returns (uint64) {
+        if (blockTimestampBeforeOffset(offsetTimestamp)) {
+            return 0;
+        }
+
+        return unsignedSinceTimestamp(offsetTimestamp) / roundDurationSeconds;
+    }
+
+    function _isAuctionRoundClosed(
+        int64 offsetTimestamp,
+        uint64 roundDurationSeconds,
+        uint64 auctionClosingSeconds
+    ) private view returns (bool) {
+        if (blockTimestampBeforeOffset(offsetTimestamp)) {
+            return false;
+        }
+
+        uint64 timeInRound = unsignedSinceTimestamp(offsetTimestamp) % roundDurationSeconds;
+        // round closes at AuctionClosedSeconds before the end of the round
+        return timeInRound >= roundDurationSeconds - auctionClosingSeconds;
+    }
+
+    function _isReserveBlackout(
+        int64 offsetTimestamp,
+        uint64 roundDurationSeconds,
+        uint64 auctionClosingSeconds,
+        uint64 reserveSubmissionSeconds,
+        uint64 latestResolvedRound
+    ) private view returns (bool) {
+        if (blockTimestampBeforeOffset(offsetTimestamp)) {
+            // no rounds have started, can't be in blackout
+            return false;
+        }
+
+        // if we're in round r, we are selling the rights for r+1
+        // if the latest round is r+1 that means we've already resolved the auction in r
+        // so we are no longer in the blackout period
+        uint64 timeSinceOffset = unsignedSinceTimestamp(offsetTimestamp);
+        uint64 curRound = timeSinceOffset / roundDurationSeconds;
+        if (latestResolvedRound >= curRound + 1) {
+            return false;
+        }
+
+        // the round in question hasnt been resolved
+        // therefore if we're within ReserveSubmissionSeconds of the auction close then we're in blackout
+        // otherwise we're not
+        uint64 timeInRound = timeSinceOffset % roundDurationSeconds;
+        return timeInRound >= (roundDurationSeconds - auctionClosingSeconds - reserveSubmissionSeconds);
+    }
+
+    function _roundTimestamps(
+        int64 offsetTimestamp,
+        uint64 roundDurationSeconds,
+        uint64 round
+    ) private pure returns (uint64, uint64) {
+        int64 intRoundStart = offsetTimestamp + int64(roundDurationSeconds * round);
         if (intRoundStart < 0) {
             revert NegativeRoundStart(intRoundStart);
         }
         uint64 roundStart = uint64(intRoundStart);
-        uint64 roundEnd = roundStart + info.roundDurationSeconds - 1;
+        uint64 roundEnd = roundStart + roundDurationSeconds - 1;
         return (roundStart, roundEnd);
     }
 }

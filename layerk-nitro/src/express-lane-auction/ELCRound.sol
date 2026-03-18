@@ -23,9 +23,10 @@ library LatestELCRoundsLib {
         ELCRound[2] storage rounds
     ) internal view returns (ELCRound storage, uint8) {
         ELCRound storage latestRound = rounds[0];
+        ELCRound storage candidateRound = rounds[1];
         uint8 index = 0;
-        if (latestRound.round < rounds[1].round) {
-            latestRound = rounds[1];
+        if (latestRound.round < candidateRound.round) {
+            latestRound = candidateRound;
             index = 1;
         }
         return (latestRound, index);
@@ -38,10 +39,14 @@ library LatestELCRoundsLib {
         ELCRound[2] storage latestResolvedRounds,
         uint64 round
     ) internal view returns (ELCRound storage) {
-        if (latestResolvedRounds[0].round == round) {
-            return latestResolvedRounds[0];
-        } else if (latestResolvedRounds[1].round == round) {
-            return latestResolvedRounds[1];
+        ELCRound storage round0 = latestResolvedRounds[0];
+        if (round0.round == round) {
+            return round0;
+        }
+
+        ELCRound storage round1 = latestResolvedRounds[1];
+        if (round1.round == round) {
+            return round1;
         } else {
             // not resolved or too old
             revert RoundNotResolved(round);

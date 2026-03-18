@@ -26,7 +26,10 @@ library BalanceLib {
     /// @param bal The balance to query
     /// @param round The round to check the balance in
     function balanceAtRound(Balance storage bal, uint64 round) internal view returns (uint256) {
-        return bal.balance - withdrawableBalanceAtRound(bal, round);
+        if (round >= bal.withdrawalRound) {
+            return 0;
+        }
+        return bal.balance;
     }
 
     /// @notice The withdrawable balance at the supplied round. If a withdrawal has been initiated, the
@@ -38,7 +41,10 @@ library BalanceLib {
         Balance storage bal,
         uint64 round
     ) internal view returns (uint256) {
-        return round >= bal.withdrawalRound ? bal.balance : 0;
+        if (round < bal.withdrawalRound) {
+            return 0;
+        }
+        return bal.balance;
     }
 
     /// @notice Increase a balance by a specified amount
@@ -72,7 +78,7 @@ library BalanceLib {
     ///              and the balance reduced anyway, withdrawals before or on this round will be respected
     ///              and the reduce will revert
     function reduce(Balance storage bal, uint256 amount, uint64 round) internal {
-        uint256 balRnd = balanceAtRound(bal, round);
+        uint256 balRnd = round >= bal.withdrawalRound ? 0 : bal.balance;
         // we add a zero check since it's possible for the amount to be zero
         // but even in that case the user must have some balance
         // to enforce that parties that havent done the deposit step cannot take part in the auction
@@ -126,7 +132,7 @@ library BalanceLib {
             revert WithdrawalMaxRound();
         }
 
-        uint256 withdrawableBalance = withdrawableBalanceAtRound(bal, round);
+        uint256 withdrawableBalance = round >= bal.withdrawalRound ? bal.balance : 0;
         if (withdrawableBalance == 0) {
             revert NothingToWithdraw();
         }

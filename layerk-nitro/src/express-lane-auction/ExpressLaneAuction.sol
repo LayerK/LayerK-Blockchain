@@ -165,11 +165,13 @@ contract ExpressLaneAuction is
     function _setReservePrice(
         uint256 newReservePrice
     ) private {
-        if (newReservePrice < minReservePrice) {
-            revert ReservePriceTooLow(newReservePrice, minReservePrice);
+        uint256 minReservePrice_ = minReservePrice;
+        if (newReservePrice < minReservePrice_) {
+            revert ReservePriceTooLow(newReservePrice, minReservePrice_);
         }
 
-        emit SetReservePrice(reservePrice, newReservePrice);
+        uint256 currentReservePrice = reservePrice;
+        emit SetReservePrice(currentReservePrice, newReservePrice);
         reservePrice = newReservePrice;
     }
 
@@ -264,8 +266,9 @@ contract ExpressLaneAuction is
 
     /// @inheritdoc IExpressLaneAuction
     function balanceOfAtRound(address account, uint64 round) external view returns (uint256) {
-        if (round < roundTimingInfo.currentRound()) {
-            revert RoundTooOld(round, roundTimingInfo.currentRound());
+        uint64 currentRound_ = roundTimingInfo.currentRound();
+        if (round < currentRound_) {
+            revert RoundTooOld(round, currentRound_);
         }
         return _balanceOf[account].balanceAtRound(round);
     }
@@ -282,8 +285,9 @@ contract ExpressLaneAuction is
         address account,
         uint64 round
     ) external view returns (uint256) {
-        if (round < roundTimingInfo.currentRound()) {
-            revert RoundTooOld(round, roundTimingInfo.currentRound());
+        uint64 currentRound_ = roundTimingInfo.currentRound();
+        if (round < currentRound_) {
+            revert RoundTooOld(round, currentRound_);
         }
         return _balanceOf[account].withdrawableBalanceAtRound(round);
     }
@@ -303,8 +307,9 @@ contract ExpressLaneAuction is
         // case the initiation were to occur right at the end of a round. Doing round + 2 ensures
         // observers always have at least one full round to become aware of the future balance change.
         uint64 withdrawalRound = roundTimingInfo.currentRound() + 2;
-        uint256 amount = _balanceOf[msg.sender].balance;
-        _balanceOf[msg.sender].initiateWithdrawal(withdrawalRound);
+        Balance storage balance = _balanceOf[msg.sender];
+        uint256 amount = balance.balance;
+        balance.initiateWithdrawal(withdrawalRound);
         emit WithdrawalInitiated(msg.sender, amount, withdrawalRound);
     }
 
@@ -348,7 +353,8 @@ contract ExpressLaneAuction is
         latestResolvedRounds.setResolvedRound(biddingForRound, firstPriceBid.expressLaneController);
 
         // first price bidder pays the beneficiary
-        _balanceOf[firstPriceBidder].reduce(priceToPay, biddingInRound);
+        Balance storage winningBalance = _balanceOf[firstPriceBidder];
+        winningBalance.reduce(priceToPay, biddingInRound);
         beneficiaryBalance += priceToPay;
 
         // emit events so that the offchain sequencer knows a new express lane controller has been selected
@@ -397,7 +403,7 @@ contract ExpressLaneAuction is
     /// @param bid The bid to recover the signing address of
     /// @param biddingForRound The round the bid is for the control of
     function recoverAndCheckBalance(
-        Bid memory bid,
+        Bid calldata bid,
         uint64 biddingForRound
     ) internal view returns (address, bytes32) {
         bytes32 bidHash = getBidHash(biddingForRound, bid.expressLaneController, bid.amount);
@@ -405,10 +411,9 @@ contract ExpressLaneAuction is
         // we are always bidding for in the current round for the next round
         uint64 curRnd = biddingForRound - 1;
         // always check that the bidder has as much as they're claiming
-        if (_balanceOf[bidder].balanceAtRound(curRnd) < bid.amount) {
-            revert InsufficientBalanceAcc(
-                bidder, bid.amount, _balanceOf[bidder].balanceAtRound(curRnd)
-            );
+        uint256 bidderBalance = _balanceOf[bidder].balanceAtRound(curRnd);
+        if (bidderBalance < bid.amount) {
+            revert InsufficientBalanceAcc(bidder, bid.amount, bidderBalance);
         }
 
         return (bidder, bidHash);
@@ -423,8 +428,9 @@ contract ExpressLaneAuction is
             revert AuctionNotClosed();
         }
 
-        if (firstPriceBid.amount < reservePrice) {
-            revert ReservePriceNotMet(firstPriceBid.amount, reservePrice);
+        uint256 reservePrice_ = reservePrice;
+        if (firstPriceBid.amount < reservePrice_) {
+            revert ReservePriceNotMet(firstPriceBid.amount, reservePrice_);
         }
 
         uint64 biddingInRound = info.currentRound();
@@ -436,7 +442,7 @@ contract ExpressLaneAuction is
             false,
             firstPriceBid,
             firstPriceBidder,
-            reservePrice,
+            reservePrice_,
             biddingInRound,
             roundStart,
             roundEnd
@@ -458,8 +464,9 @@ contract ExpressLaneAuction is
         }
 
         // second amount must be greater than or equal the reserve
-        if (secondPriceBid.amount < reservePrice) {
-            revert ReservePriceNotMet(secondPriceBid.amount, reservePrice);
+        uint256 reservePrice_ = reservePrice;
+        if (secondPriceBid.amount < reservePrice_) {
+            revert ReservePriceNotMet(secondPriceBid.amount, reservePrice_);
         }
 
         uint64 biddingInRound = info.currentRound();
@@ -506,9 +513,9 @@ contract ExpressLaneAuction is
     ) external {
         // if a transferor has already been set, it may be fixed until a future round
         Transferor storage currentTransferor = transferorOf[msg.sender];
+        uint64 currentRound_ = roundTimingInfo.currentRound();
         if (
-            currentTransferor.addr != address(0)
-                && currentTransferor.fixedUntilRound > roundTimingInfo.currentRound()
+            currentTransferor.addr != address(0) && currentTransferor.fixedUntilRound > currentRound_
         ) {
             revert FixedTransferor(currentTransferor.fixedUntilRound);
         }
