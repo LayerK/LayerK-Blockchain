@@ -8,19 +8,23 @@ import (
 
 type PromiseInterface[R any] interface {
 	Ready() bool
-	ReadyChan() chan struct{}
+	ReadyChan() <-chan struct{}
 	Await(ctx context.Context) (R, error)
 	Current() (R, error) // doesn't wait
 	Cancel()
 }
 
-var ErrNotReady error = errors.New("not ready")
+var (
+	ErrNotReady              = errors.New("not ready")
+	errPromiseAlreadySettled = errors.New("cannot produce two values")
+)
 
 type Promise[R any] struct {
 	chanReady chan struct{}
 	result    R
 	err       error
 	produced  atomic.Bool
+	cancelled atomic.Bool
 	cancel    func()
 }
 
@@ -33,7 +37,7 @@ func (p *Promise[R]) Ready() bool {
 	}
 }
 
-func (p *Promise[R]) ReadyChan() chan struct{} {
+func (p *Promise[R]) ReadyChan() <-chan struct{} {
 	return p.chanReady
 }
 
@@ -63,12 +67,15 @@ func (p *Promise[R]) Cancel() {
 	if p.Ready() {
 		return
 	}
+	if !p.cancelled.CompareAndSwap(false, true) {
+		return
+	}
 	p.cancel()
 }
 
 func (p *Promise[R]) ProduceErrorSafe(err error) error {
 	if !p.produced.CompareAndSwap(false, true) {
-		return errors.New("cannot produce two values")
+		return errPromiseAlreadySettled
 	}
 	p.err = err
 	close(p.chanReady)
@@ -84,7 +91,7 @@ func (p *Promise[R]) ProduceError(err error) {
 
 func (p *Promise[R]) ProduceSafe(value R) error {
 	if !p.produced.CompareAndSwap(false, true) {
-		return errors.New("cannot produce two values")
+		return errPromiseAlreadySettled
 	}
 	p.result = value
 	close(p.chanReady)
@@ -98,7 +105,7 @@ func (p *Promise[R]) Produce(value R) {
 	}
 }
 
-// cancel might be called multiple times while no value or error produced
+// cancel is invoked at most once while no value or error has been produced
 // cancel will be called by Await if it's context is done
 func NewPromise[R any](cancel func()) Promise[R] {
 	return Promise[R]{

@@ -88,7 +88,7 @@ func TestPromise(t *testing.T) {
 		t.Fatal("cancel not called by await on timeout")
 	}
 	tempPromise.Cancel()
-	if cancelCalled.Load() != 2 {
-		t.Fatal("cancel not called by promise.Cancel")
+	if cancelCalled.Load() != 1 {
+		t.Fatal("cancel called more than once")
 	}
 }

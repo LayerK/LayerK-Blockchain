@@ -267,7 +267,10 @@ func CallWhenTriggeredWith[T any](
 			select {
 			case <-ctx.Done():
 				return
-			case val := <-triggerChan:
+			case val, ok := <-triggerChan:
+				if !ok {
+					return
+				}
 				foo(ctx, val)
 			}
 		}
@@ -315,7 +318,11 @@ func ChanRateLimiter[T any](s *StopWaiterSafe, inChan <-chan T, maxRateCallback 
 			case <-ctx.Done():
 				close(outChan)
 				return
-			case data := <-inChan:
+			case data, ok := <-inChan:
+				if !ok {
+					close(outChan)
+					return
+				}
 				now := time.Now()
 				if now.After(nextAllowedTriggerTime) {
 					outChan <- data
