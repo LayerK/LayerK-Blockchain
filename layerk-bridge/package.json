@@ -41,7 +41,7 @@
     "build/contracts/contracts"
   ],
   "dependencies": {
-    "@arbitrum/nitro-contracts": "^1.1.1",
+    "@arbitrum/nitro-contracts": "^2.1.0",
     "@offchainlabs/upgrade-executor": "^1.1.0",
     "@openzeppelin/contracts": "^4.9.5",
     "@openzeppelin/contracts-upgradeable": "^4.9.5"

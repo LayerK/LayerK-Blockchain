@@ -33,7 +33,7 @@ abstract contract AbsInboxTest is Test {
 
         bool[] memory allowed = new bool[](2);
         allowed[0] = true;
-        allowed[0] = false;
+        allowed[1] = false;
 
         vm.expectEmit(true, true, true, true);
         emit AllowListAddressSet(users[0], allowed[0]);
@@ -52,7 +52,7 @@ abstract contract AbsInboxTest is Test {
 
         bool[] memory allowed = new bool[](2);
         allowed[0] = true;
-        allowed[0] = false;
+        allowed[1] = false;
 
         vm.expectRevert("INVALID_INPUT");
         vm.prank(rollup);
@@ -267,9 +267,28 @@ abstract contract AbsInboxTest is Test {
         vm.prank(rollup);
         inbox.setAllowListEnabled(true);
 
-        vm.expectRevert(abi.encodeWithSelector(NotAllowedOrigin.selector, user));
+        vm.expectRevert(abi.encodeWithSelector(NotAllowedSender.selector, user));
         vm.prank(user, user);
         inbox.sendL2Message(abi.encodePacked("some msg"));
+    }
+
+    function test_sendL2Message_revert_AllowedOriginCannotBypassViaContract() public {
+        address[] memory users = new address[](1);
+        users[0] = user;
+
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(rollup);
+        inbox.setAllowList(users, allowed);
+
+        vm.prank(rollup);
+        inbox.setAllowListEnabled(true);
+
+        Sender sender = new Sender();
+        vm.expectRevert(abi.encodeWithSelector(NotAllowedSender.selector, address(sender)));
+        vm.prank(user, user);
+        sender.sendL2Message(inbox, abi.encodePacked("some msg"));
     }
 
     function test_sendL2Message_revert_L1Forked() public {
@@ -325,9 +344,28 @@ abstract contract AbsInboxTest is Test {
         vm.prank(rollup);
         inbox.setAllowListEnabled(true);
 
-        vm.expectRevert(abi.encodeWithSelector(NotAllowedOrigin.selector, user));
+        vm.expectRevert(abi.encodeWithSelector(NotAllowedSender.selector, user));
         vm.prank(user, user);
         inbox.sendUnsignedTransaction(10, 10, 10, user, 10, abi.encodePacked("test data"));
+    }
+
+    function test_sendUnsignedTransaction_revert_AllowedOriginCannotBypassViaContract() public {
+        address[] memory users = new address[](1);
+        users[0] = user;
+
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(rollup);
+        inbox.setAllowList(users, allowed);
+
+        vm.prank(rollup);
+        inbox.setAllowListEnabled(true);
+
+        Sender sender = new Sender();
+        vm.expectRevert(abi.encodeWithSelector(NotAllowedSender.selector, address(sender)));
+        vm.prank(user, user);
+        sender.sendUnsignedTransaction(inbox, 10, 10, 10, user, 10, abi.encodePacked("test data"));
     }
 
     function test_sendUnsignedTransaction_revert_GasLimitTooLarge() public {
@@ -380,9 +418,28 @@ abstract contract AbsInboxTest is Test {
         vm.prank(rollup);
         inbox.setAllowListEnabled(true);
 
-        vm.expectRevert(abi.encodeWithSelector(NotAllowedOrigin.selector, user));
+        vm.expectRevert(abi.encodeWithSelector(NotAllowedSender.selector, user));
         vm.prank(user, user);
         inbox.sendContractTransaction(10, 10, user, 10, abi.encodePacked("test data"));
+    }
+
+    function test_sendContractTransaction_revert_AllowedOriginCannotBypassViaContract() public {
+        address[] memory users = new address[](1);
+        users[0] = user;
+
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(rollup);
+        inbox.setAllowList(users, allowed);
+
+        vm.prank(rollup);
+        inbox.setAllowListEnabled(true);
+
+        Sender sender = new Sender();
+        vm.expectRevert(abi.encodeWithSelector(NotAllowedSender.selector, address(sender)));
+        vm.prank(user, user);
+        sender.sendContractTransaction(inbox, 10, 10, user, 10, abi.encodePacked("test data"));
     }
 
     function test_sendContractTransaction_revert_GasLimitTooLarge() public {
@@ -404,4 +461,31 @@ abstract contract AbsInboxTest is Test {
     event InboxMessageDeliveredFromOrigin(uint256 indexed messageNum);
 }
 
-contract Sender {}
+contract Sender {
+    function sendL2Message(IInboxBase _inbox, bytes memory data) external returns (uint256) {
+        return _inbox.sendL2Message(data);
+    }
+
+    function sendUnsignedTransaction(
+        IInboxBase _inbox,
+        uint256 gasLimit,
+        uint256 maxFeePerGas,
+        uint256 nonce,
+        address to,
+        uint256 value,
+        bytes memory data
+    ) external returns (uint256) {
+        return _inbox.sendUnsignedTransaction(gasLimit, maxFeePerGas, nonce, to, value, data);
+    }
+
+    function sendContractTransaction(
+        IInboxBase _inbox,
+        uint256 gasLimit,
+        uint256 maxFeePerGas,
+        address to,
+        uint256 value,
+        bytes memory data
+    ) external returns (uint256) {
+        return _inbox.sendContractTransaction(gasLimit, maxFeePerGas, to, value, data);
+    }
+}

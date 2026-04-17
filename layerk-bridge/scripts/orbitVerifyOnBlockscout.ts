@@ -12,21 +12,47 @@ import {
   bytecode as UpgradeExecutorBytecode,
 } from '@offchainlabs/upgrade-executor/build/contracts/src/UpgradeExecutor.sol/UpgradeExecutor.json'
 
-main().then(() => console.log('Done.'))
+const IMPLEMENTATION_STORAGE_SLOT =
+  '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
+
+type VerificationOptions = {
+  address: string
+  constructorArguments: readonly unknown[]
+  contract?: string
+}
+
+main()
+  .then(() => console.log('Done.'))
+  .catch((error: unknown) => {
+    console.error(getErrorMessage(error))
+    process.exitCode = 1
+  })
+
+function requireEnv(name: string): string {
+  const value = process.env[name]?.trim()
+  if (!value) {
+    throw new Error(`Missing required env var ${name}`)
+  }
+  return value
+}
+
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim()
+  return value ? value : undefined
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return String(error)
+}
 
 async function main() {
-  const parentRpcUrl = process.env['BASECHAIN_RPC'] as string
-  const tokenBridgeCreatorAddress = process.env[
-    'L1_TOKEN_BRIDGE_CREATOR'
-  ] as string
-  const inboxAddress = process.env['INBOX_ADDRESS'] as string
-  const deployerKey = process.env['DEPLOYER_KEY'] as string
-
-  if (!parentRpcUrl || !tokenBridgeCreatorAddress || !inboxAddress) {
-    throw new Error(
-      'Required env vars: BASECHAIN_RPC, L1_TOKEN_BRIDGE_CREATOR, INBOX_ADDRESS'
-    )
-  }
+  const parentRpcUrl = requireEnv('BASECHAIN_RPC')
+  const tokenBridgeCreatorAddress = requireEnv('L1_TOKEN_BRIDGE_CREATOR')
+  const inboxAddress = requireEnv('INBOX_ADDRESS')
+  const deployerKey = optionalEnv('DEPLOYER_KEY')
 
   if (!deployerKey) {
     console.log(
@@ -36,7 +62,9 @@ async function main() {
 
   const parentProvider = new ethers.providers.JsonRpcProvider(parentRpcUrl)
   const orbitProvider = ethers.provider
-  const deployerOnOrbit = new ethers.Wallet(deployerKey, orbitProvider)
+  const deployerOnOrbit = deployerKey
+    ? new ethers.Wallet(deployerKey, orbitProvider)
+    : undefined
 
   /// collect addresses
   const tokenBridgeCreator = L1AtomicTokenBridgeCreator__factory.connect(
@@ -103,7 +131,7 @@ async function main() {
 
   /// special cases - aeWETH and UpgradeExecutor
 
-  if (deployerKey) {
+  if (deployerOnOrbit) {
     // deploy dummy aeWETH and verify it. Its deployed bytecode will match the actual aeWETH bytecode
     const dummyAeWethFac = await new AeWETH__factory(deployerOnOrbit).deploy()
     const dummyAeWeth = await dummyAeWethFac.deployed()
@@ -124,33 +152,28 @@ async function main() {
 async function _verifyContract(
   contractName: string,
   contractAddress: string,
-  constructorArguments: any[] = [],
+  constructorArguments: readonly unknown[] = [],
   contractPathAndName?: string // optional
 ): Promise<void> {
   try {
-    // Define the verification options with possible 'contract' property
-    const verificationOptions: {
-      contract?: string
-      address: string
-      constructorArguments: any[]
-    } = {
+    const verificationOptions: VerificationOptions = {
       address: contractAddress,
-      constructorArguments: constructorArguments,
+      constructorArguments,
     }
 
-    // if contractPathAndName is provided, add it to the verification options
     if (contractPathAndName) {
       verificationOptions.contract = contractPathAndName
     }
 
     await run('verify:verify', verificationOptions)
     console.log(`Verified contract ${contractName} successfully.`)
-  } catch (error: any) {
-    if (error.message.includes('Already Verified')) {
+  } catch (error: unknown) {
+    const message = getErrorMessage(error)
+    if (message.includes('Already Verified')) {
       console.log(`Contract ${contractName} is already verified.`)
     } else {
       console.error(
-        `Verification for ${contractName} failed with the following error: ${error.message}`
+        `Verification for ${contractName} failed with the following error: ${message}`
       )
     }
   }
@@ -164,7 +187,7 @@ async function _getLogicAddress(
     await _getAddressAtStorageSlot(
       contractAddress,
       provider,
-      '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
+      IMPLEMENTATION_STORAGE_SLOT
     )
   ).toLowerCase()
 }
@@ -179,14 +202,13 @@ async function _getAddressAtStorageSlot(
     storageSlotBytes
   )
 
-  if (!storageValue) {
-    return ''
+  if (storageValue === ethers.constants.HashZero) {
+    throw new Error(
+      `Storage slot ${storageSlotBytes} is empty for contract ${contractAddress}`
+    )
   }
 
-  // remove excess bytes
-  const formatAddress =
-    storageValue.substring(0, 2) + storageValue.substring(26)
+  const formatAddress = `0x${storageValue.slice(-40)}`
 
-  // return address as checksum address
   return ethers.utils.getAddress(formatAddress)
 }

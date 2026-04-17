@@ -18,13 +18,11 @@ if (!l1privKey) throw new Error('No L1_PRIVKEY')
 const l2privKey = process.env['L2_PRIVKEY']
 if (!l2privKey) throw new Error('No L2_PRIVKEY')
 
-const L1Signer = ethers.Wallet.fromMnemonic(l1privKey)
-const L2Signer = ethers.Wallet.fromMnemonic(l2privKey)
+const l1Wallet = ethers.Wallet.fromMnemonic(l1privKey)
+const l2Wallet = ethers.Wallet.fromMnemonic(l2privKey)
 
-const l1Signer = L1Signer.connect(l1Prov)
-const l2Signer = L1Signer.connect(l2Prov)
-
-const wait = (ms: number) => new Promise(res => setTimeout(res, ms))
+const l1Signer = l1Wallet.connect(l1Prov)
+const l2Signer = l2Wallet.connect(l2Prov)
 
 const l1GatewayRouterAddr = MainnetDeployments.l1GatewayRouter
 const l2GatewayRouterAddr = MainnetDeployments.l2GatewayRouter
@@ -159,4 +157,7 @@ const main = async () => {
 
 main()
   .then(() => console.log('done'))
-  .catch(err => console.log(err))
+  .catch((err: unknown) => {
+    console.error(err)
+    process.exitCode = 1
+  })

@@ -1,17 +1,12 @@
 # How to deploy RollupCreator and TokenBridgeCreator?
 
 ## Deploy RollupCreator
-RollupCreator is in nitro-contracts repo
+RollupCreator is provided by the `layerk-nitro` workspace in this monorepo.
 ```
-cd nitro-contracts
-```
-
-Checkout target code, ie.
-```
-git checkout v1.1.0
+cd layerk-nitro
 ```
 
-Install dependencies and build
+Use the same Nitro contract line as this repository's `layerk-nitro/package.json`.
 ```
 yarn install
 yarn build
@@ -41,7 +36,7 @@ Script output will contain all deployed addresses.
 ## Deploy TokenBridgeCreator
 Checkout target code, install dependencies and build
 ```
-cd token-bridge-contracts
+cd layerk-bridge
 yarn install
 yarn build
 ```
@@ -79,7 +74,7 @@ There is a verification script which checks that token bridge contracts have bee
 
 Checkout target code, install dependencies and build
 ```
-cd token-bridge-contracts
+cd layerk-bridge
 yarn install
 yarn build
 ```

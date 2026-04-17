@@ -9,17 +9,12 @@ This repository is offered under the Apache 2.0 license. See LICENSE for details
 # How to deploy RollupCreator and TokenBridgeCreator?
 
 ## Deploy RollupCreator
-RollupCreator is in nitro-contracts repo
+RollupCreator is provided by the `layerk-nitro` workspace in this monorepo.
 ```
-cd nitro-contracts
-```
-
-Checkout target code, ie.
-```
-git checkout v1.1.0
+cd layerk-nitro
 ```
 
-Install dependencies and build
+Use the same Nitro contract line as this repository's `layerk-nitro/package.json`.
 ```
 yarn install
 yarn build
@@ -49,7 +44,7 @@ Script output will contain all deployed addresses.
 ## Deploy TokenBridgeCreator
 Checkout target code, install dependencies and build
 ```
-cd token-bridge-contracts
+cd layerk-bridge
 yarn install
 yarn build
 ```
@@ -87,7 +82,7 @@ There is a verification script which checks that token bridge contracts have bee
 
 Checkout target code, install dependencies and build
 ```
-cd token-bridge-contracts
+cd layerk-bridge
 yarn install
 yarn build
 ```
@@ -119,4 +114,3 @@ Script is applicable for the verifying source code on the Blockscout explorer. S
 3. Set up `.env` - provide `BASECHAIN_RPC`, `L1_TOKEN_BRIDGE_CREATOR` (address of token bridge creator on parent chain) and `INBOX_ADDRESS`. 
 4. Optionally provide the `DEPLOYER_KEY`. That's the private key of any funded address on the Orbit chain. It is required if you want to get `UpgradeExecutor` and `aeWETH` verified. Due to specifics of cross-chain deployment used by token bridge creator, the only way to get `UpgradeExecutor` and `aeWETH` verified is to deploy dummy instances on the Orbit chain and verify them. That way the original instances will get automatically verified because of the deployed bytecode match. If `DEPLOYER_KEY` is not provided, this step will be skipped.
 5. Run script as following: `yarn run blockscout:verify --network orbit`
-

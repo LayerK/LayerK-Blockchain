@@ -11,6 +11,7 @@ import {
     InsufficientSubmissionCost,
     L1Forked,
     NotAllowedOrigin,
+    NotAllowedSender,
     NotCodelessOrigin,
     NotRollupOrOwner,
     RetryableData
@@ -78,13 +79,18 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
         emit AllowListEnabledUpdated(_allowListEnabled);
     }
 
-    /// @dev this modifier checks the tx.origin instead of msg.sender for convenience (ie it allows
-    /// allowed users to interact with the token bridge without needing the token bridge to be allowList aware).
-    /// this modifier is not intended to use to be used for security (since this opens the allowList to
-    /// a smart contract phishing risk).
-    modifier onlyAllowed() {
+    /// @dev `sendL2MessageFromOrigin` already requires `msg.sender == tx.origin`, so checking the
+    /// origin here does not widen access beyond the direct caller.
+    modifier onlyAllowedOrigin() {
         // solhint-disable-next-line avoid-tx-origin
         if (allowListEnabled && !isAllowed[tx.origin]) revert NotAllowedOrigin(tx.origin);
+        _;
+    }
+
+    /// @dev Contract-capable entrypoints must key the allow list off `msg.sender` so an allow-listed
+    /// EOA cannot be phished through an arbitrary forwarding contract.
+    modifier onlyAllowedSender() {
+        if (allowListEnabled && !isAllowed[msg.sender]) revert NotAllowedSender(msg.sender);
         _;
     }
 
@@ -132,7 +138,12 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
     }
 
     /// @inheritdoc IInboxBase
-    function sendL2MessageFromOrigin(bytes calldata messageData) external whenNotPaused onlyAllowed returns (uint256) {
+    function sendL2MessageFromOrigin(bytes calldata messageData)
+        external
+        whenNotPaused
+        onlyAllowedOrigin
+        returns (uint256)
+    {
         if (_chainIdChanged()) revert L1Forked();
         if (!CallerChecker.isCallerCodelessOrigin()) revert NotCodelessOrigin();
         if (messageData.length > maxDataSize) revert DataTooLarge(messageData.length, maxDataSize);
@@ -142,7 +153,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
     }
 
     /// @inheritdoc IInboxBase
-    function sendL2Message(bytes calldata messageData) external whenNotPaused onlyAllowed returns (uint256) {
+    function sendL2Message(bytes calldata messageData) external whenNotPaused onlyAllowedSender returns (uint256) {
         if (_chainIdChanged()) revert L1Forked();
         return _deliverMessage(L2_MSG, msg.sender, messageData, 0);
     }
@@ -155,7 +166,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
         address to,
         uint256 value,
         bytes calldata data
-    ) external whenNotPaused onlyAllowed returns (uint256) {
+    ) external whenNotPaused onlyAllowedSender returns (uint256) {
         // arbos will discard unsigned tx with gas limit too large
         if (gasLimit > type(uint64).max) {
             revert GasLimitTooLarge();
@@ -177,7 +188,7 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
         address to,
         uint256 value,
         bytes calldata data
-    ) external whenNotPaused onlyAllowed returns (uint256) {
+    ) external whenNotPaused onlyAllowedSender returns (uint256) {
         // arbos will discard unsigned tx with gas limit too large
         if (gasLimit > type(uint64).max) {
             revert GasLimitTooLarge();
