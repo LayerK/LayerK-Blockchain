@@ -9,13 +9,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
 const defaultRPCURL = "https://mainnet-rpc.layerk.com"
+const defaultMinConfirmations = 3
 const defaultPollInterval = 5 * time.Second
 const defaultRequestTimeout = 10 * time.Second
 const defaultMaxBlocksPerPoll = 128
@@ -28,6 +31,7 @@ var defaultAddressesToMonitor = []string{
 }
 
 var rpcURL = loadRPCURL()
+var minConfirmations = loadNonNegativeIntEnv("MIN_CONFIRMATIONS", defaultMinConfirmations)
 var pollInterval = loadDurationEnvMillis("POLL_INTERVAL_MS", defaultPollInterval)
 var requestTimeout = loadDurationEnvMillis("REQUEST_TIMEOUT_MS", defaultRequestTimeout)
 var maxBlocksPerPoll = loadPositiveIntEnv("MAX_BLOCKS_PER_POLL", defaultMaxBlocksPerPoll)
@@ -55,6 +59,20 @@ func loadPositiveIntEnv(name string, fallback int) int {
 
 	value, err := strconv.Atoi(raw)
 	if err != nil || value <= 0 {
+		fmt.Printf("Invalid %s=%q; using default %d\n", name, raw, fallback)
+		return fallback
+	}
+	return value
+}
+
+func loadNonNegativeIntEnv(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
 		fmt.Printf("Invalid %s=%q; using default %d\n", name, raw, fallback)
 		return fallback
 	}
@@ -145,28 +163,41 @@ type rpcTx struct {
 }
 
 type rpcBlock struct {
+	Number       string  `json:"number"`
+	Hash         string  `json:"hash"`
+	ParentHash   string  `json:"parentHash"`
 	Transactions []rpcTx `json:"transactions"`
 }
 
+type rpcRequest struct {
+	JSONRPC string        `json:"jsonrpc"`
+	ID      int           `json:"id"`
+	Method  string        `json:"method"`
+	Params  []interface{} `json:"params"`
+}
+
 // Function to make JSON-RPC calls
-func makeRPCRequest(method string, params []interface{}, result interface{}) error {
-	// Prepare the JSON payload
-	payload := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  method,
-		"params":  params,
+func makeRPCRequest(ctx context.Context, method string, params []interface{}, result interface{}) error {
+	payload := rpcRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  method,
+		Params:  params,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 
-	// Make the HTTP POST request
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rpcURL, bytes.NewBuffer(data))
+	req, err := http.NewRequestWithContext(
+		requestCtx,
+		http.MethodPost,
+		rpcURL,
+		bytes.NewReader(data),
+	)
 	if err != nil {
 		return err
 	}
@@ -242,17 +273,41 @@ func hexToBigInt(hexStr string) (*big.Int, error) {
 	return value, nil
 }
 
+func waitForNextPoll(ctx context.Context) bool {
+	timer := time.NewTimer(pollInterval)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
 // Function to check transactions in a block
-func checkBlock(blockNumberHex string) error {
-	fmt.Printf("Checking block %s...\n", blockNumberHex)
+func checkBlock(ctx context.Context, blockNumberHex string, expectedParentHash string) (string, error) {
 	params := []interface{}{blockNumberHex, true}
 	var block rpcBlock
-	if err := makeRPCRequest("eth_getBlockByNumber", params, &block); err != nil {
-		return fmt.Errorf("block %s returned empty result: %w", blockNumberHex, err)
+	if err := makeRPCRequest(ctx, "eth_getBlockByNumber", params, &block); err != nil {
+		return "", fmt.Errorf("block %s returned empty result: %w", blockNumberHex, err)
 	}
 
 	if block.Transactions == nil {
-		return fmt.Errorf("block %s missing transactions array", blockNumberHex)
+		return "", fmt.Errorf("block %s missing transactions array", blockNumberHex)
+	}
+
+	if block.Number == "" || block.Hash == "" {
+		return "", fmt.Errorf("block %s missing hash metadata", blockNumberHex)
+	}
+
+	if expectedParentHash != "" && !strings.EqualFold(block.ParentHash, expectedParentHash) {
+		return "", fmt.Errorf(
+			"block %s parent hash mismatch: expected %s got %s",
+			blockNumberHex,
+			expectedParentHash,
+			block.ParentHash,
+		)
 	}
 
 	for _, tx := range block.Transactions {
@@ -279,74 +334,121 @@ func checkBlock(blockNumberHex string) error {
 		}
 	}
 
-	return nil
+	return block.Hash, nil
 }
 
 func main() {
-	var lastBlockNumberHex string
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	var lastProcessedBlockNum *big.Int
+	var lastProcessedBlockHash string
 	fmt.Printf(
-		"Monitoring %d address(es) via %s (poll=%s timeout=%s maxBlocksPerPoll=%d)\n",
+		"Monitoring %d address(es) via %s (confirmations=%d poll=%s timeout=%s maxBlocksPerPoll=%d)\n",
 		len(monitoredSet),
 		rpcURL,
+		minConfirmations,
 		pollInterval,
 		requestTimeout,
 		maxBlocksPerPoll,
 	)
 
 	for {
-		// Get the latest block number
 		var currentBlockNumberHex string
-		if err := makeRPCRequest("eth_blockNumber", []interface{}{}, &currentBlockNumberHex); err != nil {
+		if err := makeRPCRequest(ctx, "eth_blockNumber", []interface{}{}, &currentBlockNumberHex); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
 			fmt.Println("Error fetching block number:", err)
-			time.Sleep(pollInterval)
+			if !waitForNextPoll(ctx) {
+				return
+			}
 			continue
 		}
 
-		if lastBlockNumberHex == "" {
-			lastBlockNumberHex = currentBlockNumberHex
-			time.Sleep(pollInterval)
+		currentBlockNum, err := hexToBigInt(currentBlockNumberHex)
+		if err != nil {
+			fmt.Println("Error parsing current block number:", err)
+			if !waitForNextPoll(ctx) {
+				return
+			}
 			continue
 		}
 
-		if currentBlockNumberHex != lastBlockNumberHex {
-			// Convert hex block numbers to integers
-			lastBlockNum, err := hexToBigInt(lastBlockNumberHex)
-			if err != nil {
-				fmt.Println("Error parsing last block number:", err)
-				lastBlockNumberHex = currentBlockNumberHex
-				time.Sleep(pollInterval)
+		finalizedBlockNum := new(big.Int).Set(currentBlockNum)
+		if minConfirmations > 0 {
+			confirmationWindow := big.NewInt(int64(minConfirmations))
+			if currentBlockNum.Cmp(confirmationWindow) <= 0 {
+				if !waitForNextPoll(ctx) {
+					return
+				}
 				continue
 			}
-			currentBlockNum, err := hexToBigInt(currentBlockNumberHex)
-			if err != nil {
-				fmt.Println("Error parsing current block number:", err)
-				time.Sleep(pollInterval)
-				continue
-			}
-
-            startBlockNum := new(big.Int).Set(lastBlockNum)
-            diff := new(big.Int).Sub(currentBlockNum, lastBlockNum)
-            maxRange := big.NewInt(int64(maxBlocksPerPoll))
-            if diff.Cmp(maxRange) > 0 {
-                startBlockNum = new(big.Int).Sub(currentBlockNum, maxRange)
-                fmt.Printf(
-                    "Backlog detected (%s blocks). Processing only the latest %d blocks this cycle.\n",
-                    diff.String(),
-                    maxBlocksPerPoll,
-                )
-            }
-
-            // Check new blocks since the last known (bounded by maxBlocksPerPoll)
-            for i := new(big.Int).Add(startBlockNum, big.NewInt(1)); i.Cmp(currentBlockNum) <= 0; i.Add(i, big.NewInt(1)) {
-                blockNumberHex := "0x" + i.Text(16)
-                if err := checkBlock(blockNumberHex); err != nil {
-                    fmt.Printf("Error checking block %s: %v\n", blockNumberHex, err)
-                }
-            }
-
-			lastBlockNumberHex = currentBlockNumberHex
+			finalizedBlockNum.Sub(finalizedBlockNum, confirmationWindow)
 		}
 
-		time.Sleep(pollInterval)
+		if lastProcessedBlockNum == nil {
+			lastProcessedBlockNum = new(big.Int).Set(finalizedBlockNum)
+			if !waitForNextPoll(ctx) {
+				return
+			}
+			continue
+		}
+
+		if finalizedBlockNum.Cmp(lastProcessedBlockNum) < 0 {
+			fmt.Printf(
+				"Finalized head moved backwards from %s to %s; resetting cursor.\n",
+				lastProcessedBlockNum.String(),
+				finalizedBlockNum.String(),
+			)
+			lastProcessedBlockNum = new(big.Int).Set(finalizedBlockNum)
+			lastProcessedBlockHash = ""
+			if !waitForNextPoll(ctx) {
+				return
+			}
+			continue
+		}
+
+		if finalizedBlockNum.Cmp(lastProcessedBlockNum) == 0 {
+			if !waitForNextPoll(ctx) {
+				return
+			}
+			continue
+		}
+
+		startBlockNum := new(big.Int).Add(lastProcessedBlockNum, big.NewInt(1))
+		expectedParentHash := lastProcessedBlockHash
+		diff := new(big.Int).Sub(finalizedBlockNum, lastProcessedBlockNum)
+		maxRange := big.NewInt(int64(maxBlocksPerPoll))
+		if diff.Cmp(maxRange) > 0 {
+			startBlockNum = new(big.Int).Sub(finalizedBlockNum, maxRange)
+			startBlockNum.Add(startBlockNum, big.NewInt(1))
+			expectedParentHash = ""
+			fmt.Printf(
+				"Backlog detected (%s finalized blocks). Processing only the latest %d blocks this cycle.\n",
+				diff.String(),
+				maxBlocksPerPoll,
+			)
+		}
+
+		one := big.NewInt(1)
+		for i := new(big.Int).Set(startBlockNum); i.Cmp(finalizedBlockNum) <= 0; i.Add(i, one) {
+			blockNumberHex := "0x" + i.Text(16)
+			blockHash, err := checkBlock(ctx, blockNumberHex, expectedParentHash)
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				fmt.Printf("Error checking block %s: %v\n", blockNumberHex, err)
+				break
+			}
+			lastProcessedBlockNum = new(big.Int).Set(i)
+			lastProcessedBlockHash = blockHash
+			expectedParentHash = blockHash
+		}
+
+		if !waitForNextPoll(ctx) {
+			return
+		}
 	}
 }

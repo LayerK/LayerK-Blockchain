@@ -5,13 +5,26 @@ const DEFAULT_MONITORED_ADDRESSES = [
   '0xE01B9E7A53629D23ee7571A3cF05C3188883f35e',
   '0xDe96e7Ed414943Ebb73aE64B517166Ad22e39729',
 ];
+const DEFAULT_MIN_CONFIRMATIONS = 3;
 const DEFAULT_MAX_BLOCK_QUEUE = 32;
+const DEFAULT_PROCESSED_BLOCK_CACHE = 256;
 
 function parsePositiveIntEnv(name, fallback) {
   const raw = process.env[name];
   if (!raw) return fallback;
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.warn(`Invalid ${name}=${raw}; using default ${fallback}`);
+    return fallback;
+  }
+  return parsed;
+}
+
+function parseNonNegativeIntEnv(name, fallback) {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
     console.warn(`Invalid ${name}=${raw}; using default ${fallback}`);
     return fallback;
   }
@@ -69,7 +82,12 @@ function loadMonitoredAddresses() {
 }
 
 const RPC_URL = loadRpcUrl();
+const MIN_CONFIRMATIONS = parseNonNegativeIntEnv('MIN_CONFIRMATIONS', DEFAULT_MIN_CONFIRMATIONS);
 const MAX_BLOCK_QUEUE = parsePositiveIntEnv('MAX_BLOCK_QUEUE', DEFAULT_MAX_BLOCK_QUEUE);
+const PROCESSED_BLOCK_CACHE = parsePositiveIntEnv(
+  'PROCESSED_BLOCK_CACHE',
+  DEFAULT_PROCESSED_BLOCK_CACHE
+);
 const monitoredSet = new Set(loadMonitoredAddresses());
 
 const provider = new ethers.providers.JsonRpcProvider(RPC_URL, undefined, {
@@ -82,14 +100,45 @@ function isMonitoredAddress(address) {
   return Boolean(address && monitoredSet.has(address.toLowerCase()));
 }
 
+const processedBlocks = new Map();
+let lastProcessedBlockNumber = null;
+let lastProcessedBlockHash = null;
+let lastQueuedFinalizedBlock = 0;
+
+function rememberProcessedBlock(blockNumber, blockHash) {
+  processedBlocks.set(blockNumber, blockHash);
+  while (processedBlocks.size > PROCESSED_BLOCK_CACHE) {
+    const oldest = processedBlocks.keys().next().value;
+    processedBlocks.delete(oldest);
+  }
+}
+
 async function checkBlock(blockNumber) {
-  console.log(`Checking block ${blockNumber}...`);
   const block = await provider.getBlockWithTransactions(blockNumber);
 
-  if (!block || !Array.isArray(block.transactions)) {
+  if (!block || !block.hash || !Array.isArray(block.transactions)) {
     console.warn(`Block ${blockNumber} returned no transactions`);
     return;
   }
+
+  if (processedBlocks.get(block.number) === block.hash) {
+    return;
+  }
+
+  if (
+    lastProcessedBlockNumber !== null &&
+    block.number === lastProcessedBlockNumber + 1 &&
+    lastProcessedBlockHash &&
+    block.parentHash !== lastProcessedBlockHash
+  ) {
+    console.warn(
+      `Detected non-contiguous finalized block stream at ${block.number}; expected parent ${lastProcessedBlockHash}, got ${block.parentHash}`
+    );
+  }
+
+  rememberProcessedBlock(block.number, block.hash);
+  lastProcessedBlockNumber = block.number;
+  lastProcessedBlockHash = block.hash;
 
   for (const tx of block.transactions) {
     if (!tx) continue;
@@ -109,6 +158,37 @@ async function checkBlock(blockNumber) {
 const blockQueue = [];
 const queuedBlocks = new Set();
 let isProcessingQueue = false;
+
+function enqueueFinalizedBlocks(headBlockNumber) {
+  const latestFinalizedBlock = headBlockNumber - MIN_CONFIRMATIONS;
+  if (latestFinalizedBlock <= 0 || latestFinalizedBlock <= lastQueuedFinalizedBlock) {
+    return;
+  }
+
+  if (lastQueuedFinalizedBlock === 0 && lastProcessedBlockNumber === null && blockQueue.length === 0) {
+    lastQueuedFinalizedBlock = latestFinalizedBlock;
+    return;
+  }
+
+  let startBlock = lastQueuedFinalizedBlock + 1;
+  const blocksToQueue = latestFinalizedBlock - startBlock + 1;
+  if (blocksToQueue > MAX_BLOCK_QUEUE) {
+    startBlock = latestFinalizedBlock - MAX_BLOCK_QUEUE + 1;
+    blockQueue.length = 0;
+    queuedBlocks.clear();
+    console.warn(
+      `Backlog detected (${blocksToQueue} finalized blocks). Only queueing the latest ${MAX_BLOCK_QUEUE} finalized blocks.`
+    );
+  }
+
+  for (let blockNumber = startBlock; blockNumber <= latestFinalizedBlock; blockNumber += 1) {
+    if (queuedBlocks.has(blockNumber)) continue;
+    blockQueue.push(blockNumber);
+    queuedBlocks.add(blockNumber);
+  }
+
+  lastQueuedFinalizedBlock = latestFinalizedBlock;
+}
 
 async function drainQueue() {
   if (isProcessingQueue) return;
@@ -130,20 +210,7 @@ async function drainQueue() {
 }
 
 provider.on('block', (blockNumber) => {
-  if (queuedBlocks.has(blockNumber)) {
-    return;
-  }
-
-  if (blockQueue.length >= MAX_BLOCK_QUEUE) {
-    const droppedBlock = blockQueue.shift();
-    queuedBlocks.delete(droppedBlock);
-    console.warn(
-      `Block queue limit (${MAX_BLOCK_QUEUE}) reached; dropping oldest queued block ${droppedBlock}`
-    );
-  }
-
-  blockQueue.push(blockNumber);
-  queuedBlocks.add(blockNumber);
+  enqueueFinalizedBlocks(blockNumber);
   void drainQueue();
 });
 
@@ -151,4 +218,6 @@ provider.on('error', (error) => {
   console.error('Provider error:', error);
 });
 
-console.log(`Monitoring ${monitoredSet.size} address(es) using ${RPC_URL}`);
+console.log(
+  `Monitoring ${monitoredSet.size} address(es) using ${RPC_URL} with ${MIN_CONFIRMATIONS} confirmation(s)`
+);
