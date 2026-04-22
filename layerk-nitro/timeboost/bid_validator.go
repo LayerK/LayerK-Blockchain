@@ -349,8 +349,10 @@ func (bv *BidValidator) validateBid(
 	}
 
 	// Check bid is higher than or equal to reserve price.
-	if bid.Amount.Cmp(bv.reservePrice) == -1 {
-		return nil, errors.Wrapf(ErrReservePriceNotMet, "reserve price %s, bid %s", bv.reservePrice.String(), bid.Amount.String())
+	// Snapshot under reservePriceLock to avoid a data race with SetReservePrice.
+	reservePrice := bv.fetchReservePrice()
+	if bid.Amount.Cmp(reservePrice) == -1 {
+		return nil, errors.Wrapf(ErrReservePriceNotMet, "reserve price %s, bid %s", reservePrice.String(), bid.Amount.String())
 	}
 
 	// Validate the signature.
