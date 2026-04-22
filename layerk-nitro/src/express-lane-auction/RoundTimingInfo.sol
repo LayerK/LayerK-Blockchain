@@ -205,7 +205,8 @@ library RoundTimingInfoLib {
         // the round in question hasnt been resolved
         // therefore if we're within ReserveSubmissionSeconds of the auction close then we're in blackout
         // otherwise we're not
-        uint64 timeInRound = timeSinceOffset % roundDurationSeconds;
+        // reuse the quotient to derive the remainder without a second division
+        uint64 timeInRound = timeSinceOffset - curRound * roundDurationSeconds;
         return timeInRound >= (roundDurationSeconds - auctionClosingSeconds - reserveSubmissionSeconds);
     }
 

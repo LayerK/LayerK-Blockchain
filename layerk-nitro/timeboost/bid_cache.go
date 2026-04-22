@@ -44,15 +44,15 @@ type rankedBid struct {
 	hash *big.Int
 }
 
-func betterBid(candidate, current *rankedBid) bool {
+func betterThan(candidateBid *ValidatedBid, candidateHash *big.Int, current *rankedBid) bool {
 	if current == nil || current.bid == nil {
 		return true
 	}
-	amountCmp := candidate.bid.Amount.Cmp(current.bid.Amount)
+	amountCmp := candidateBid.Amount.Cmp(current.bid.Amount)
 	if amountCmp != 0 {
 		return amountCmp > 0
 	}
-	return candidate.hash.Cmp(current.hash) > 0
+	return candidateHash.Cmp(current.hash) > 0
 }
 
 // topTwoBids returns the top two bids in the cache.
@@ -64,15 +64,14 @@ func (bc *bidCache) topTwoBids() *auctionResult {
 	var second *rankedBid
 	for _, bid := range bc.bidsByExpressLaneControllerAddr {
 		bidHash := bid.BigIntHash(bc.auctionContractDomainSeparator)
-		candidate := &rankedBid{bid: bid, hash: bidHash}
 
-		if betterBid(candidate, first) {
+		if betterThan(bid, bidHash, first) {
 			second = first
-			first = candidate
+			first = &rankedBid{bid: bid, hash: bidHash}
 			continue
 		}
-		if betterBid(candidate, second) {
-			second = candidate
+		if betterThan(bid, bidHash, second) {
+			second = &rankedBid{bid: bid, hash: bidHash}
 		}
 	}
 

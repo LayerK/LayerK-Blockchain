@@ -12,13 +12,18 @@ library MerkleLib {
     ) internal pure returns (bytes32) {
         bytes32[] memory prevLayer = _hashes;
         while (prevLayer.length > 1) {
-            bytes32[] memory nextLayer = new bytes32[]((prevLayer.length + 1) / 2);
-            for (uint256 i = 0; i < nextLayer.length; i++) {
-                if (2 * i + 1 < prevLayer.length) {
-                    nextLayer[i] =
-                        keccak256(abi.encodePacked(prevLayer[2 * i], prevLayer[2 * i + 1]));
+            uint256 prevLength = prevLayer.length;
+            uint256 nextLength = (prevLength + 1) / 2;
+            bytes32[] memory nextLayer = new bytes32[](nextLength);
+            for (uint256 i = 0; i < nextLength;) {
+                uint256 left = 2 * i;
+                if (left + 1 < prevLength) {
+                    nextLayer[i] = keccak256(abi.encodePacked(prevLayer[left], prevLayer[left + 1]));
                 } else {
-                    nextLayer[i] = prevLayer[2 * i];
+                    nextLayer[i] = prevLayer[left];
+                }
+                unchecked {
+                    ++i;
                 }
             }
             prevLayer = nextLayer;
