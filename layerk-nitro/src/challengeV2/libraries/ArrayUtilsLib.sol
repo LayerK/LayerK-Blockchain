@@ -14,11 +14,15 @@ library ArrayUtilsLib {
         bytes32[] memory arr,
         bytes32 newItem
     ) internal pure returns (bytes32[] memory) {
-        bytes32[] memory clone = new bytes32[](arr.length + 1);
-        for (uint256 i = 0; i < arr.length; i++) {
+        uint256 arrLength = arr.length;
+        bytes32[] memory clone = new bytes32[](arrLength + 1);
+        for (uint256 i = 0; i < arrLength;) {
             clone[i] = arr[i];
+            unchecked {
+                ++i;
+            }
         }
-        clone[clone.length - 1] = newItem;
+        clone[arrLength] = newItem;
         return clone;
     }
 
@@ -36,25 +40,36 @@ library ArrayUtilsLib {
         require(endIndex <= arr.length, "End not less or equal than length");
 
         bytes32[] memory newArr = new bytes32[](endIndex - startIndex);
-        for (uint256 i = startIndex; i < endIndex; i++) {
+        for (uint256 i = startIndex; i < endIndex;) {
             newArr[i - startIndex] = arr[i];
+            unchecked {
+                ++i;
+            }
         }
         return newArr;
     }
 
     /// @notice Concatenated to arrays
     /// @param arr1 First array
-    /// @param arr1 Second array
+    /// @param arr2 Second array
     function concat(
         bytes32[] memory arr1,
         bytes32[] memory arr2
     ) internal pure returns (bytes32[] memory) {
-        bytes32[] memory full = new bytes32[](arr1.length + arr2.length);
-        for (uint256 i = 0; i < arr1.length; i++) {
+        uint256 arr1Length = arr1.length;
+        uint256 arr2Length = arr2.length;
+        bytes32[] memory full = new bytes32[](arr1Length + arr2Length);
+        for (uint256 i = 0; i < arr1Length;) {
             full[i] = arr1[i];
+            unchecked {
+                ++i;
+            }
         }
-        for (uint256 i = 0; i < arr2.length; i++) {
-            full[arr1.length + i] = arr2[i];
+        for (uint256 i = 0; i < arr2Length;) {
+            full[arr1Length + i] = arr2[i];
+            unchecked {
+                ++i;
+            }
         }
         return full;
     }
