@@ -456,8 +456,10 @@ func (a *AuctioneerServer) Start(ctx_in context.Context) {
 			case bid := <-a.bidsReceiver:
 				log.Info("Consumed validated bid", "bidder", bid.Bidder, "amount", bid.Amount, "round", bid.Round)
 				a.bidCache.add(JsonValidatedBidToGo(bid))
-				// Persist the validated bid to the database as a non-blocking operation.
-				go a.persistValidatedBid(bid)
+				// Persist the validated bid to the database within the StopWaiter lifecycle.
+				a.StopWaiter.LaunchUntrackedThread(func() {
+					a.persistValidatedBid(bid)
+				})
 			case <-ctx.Done():
 				log.Info("Context done while waiting redis streams to be ready, failed to start")
 				return
@@ -468,19 +470,29 @@ func (a *AuctioneerServer) Start(ctx_in context.Context) {
 	// Auction resolution thread.
 	a.StopWaiter.LaunchThread(func(ctx context.Context) {
 		ticker := newRoundTicker(a.roundTimingInfo)
-		go ticker.tickAtAuctionClose()
+		// Launch ticker goroutine under the StopWaiter context so it stops cleanly.
+		a.StopWaiter.LaunchUntrackedThread(func() {
+			ticker.tickAtAuctionClose(ctx)
+		})
 		for {
 			select {
 			case <-ctx.Done():
 				log.Error("Context closed, autonomous auctioneer shutting down")
 				return
-			case auctionClosingTime := <-ticker.c:
+			case auctionClosingTime, ok := <-ticker.c:
+				if !ok {
+					return
+				}
 				log.Info("New auction closing time reached", "closingTime", auctionClosingTime, "totalBids", a.bidCache.size())
-				time.Sleep(a.auctionResolutionWaitTime)
+				select {
+				case <-time.After(a.auctionResolutionWaitTime):
+				case <-ctx.Done():
+					return
+				}
 				if err := a.resolveAuction(ctx); err != nil {
 					log.Error("Could not resolve auction for round", "error", err)
 				}
-				// Clear the bid cache.
+				// Clear the bid cache after resolving the current round.
 				a.bidCache = newBidCache(a.auctionContractDomainSeparator)
 			}
 		}
@@ -571,9 +583,11 @@ func (a *AuctioneerServer) resolveAuction(ctx context.Context) error {
 
 	roundEndTime := a.roundTimingInfo.TimeOfNextRound()
 	retryInterval := 1 * time.Second
+	// Create a single ethclient wrapper for the duration of this resolution attempt.
+	ethClient := ethclient.NewClient(sequencerRpc)
 
-	retryLimit := 5
-	for retryCount := 0; ; retryCount++ {
+	const retryLimit = 5
+	for retryCount := 0; retryCount < retryLimit; retryCount++ {
 		if err = retryUntil(ctx, func() error {
 			if err := sequencerRpc.CallContext(ctx, nil, "auctioneer_submitAuctionResolutionTransaction", tx); err != nil {
 				log.Error("Error submitting auction resolution to sequencer endpoint", "error", err)
@@ -586,7 +600,7 @@ func (a *AuctioneerServer) resolveAuction(ctx context.Context) error {
 
 		// Wait for the transaction to be mined until this round ends
 		waitMinedCtx, cancel := context.WithTimeout(ctx, time.Until(roundEndTime))
-		receipt, err = bind.WaitMined(waitMinedCtx, ethclient.NewClient(sequencerRpc), tx)
+		receipt, err = bind.WaitMined(waitMinedCtx, ethClient, tx)
 		cancel()
 		if err != nil { // error is only returned when context expires i.e the current round has ended so no point in retrying
 			return fmt.Errorf("error waiting for transaction to be mined: %w", err)
@@ -599,7 +613,7 @@ func (a *AuctioneerServer) resolveAuction(ctx context.Context) error {
 		if tx != nil {
 			log.Warn("Transaction failed or did not finalize successfully", "txHash", tx.Hash().Hex())
 		}
-		if retryCount == retryLimit {
+		if retryCount == retryLimit-1 {
 			return errors.New("could not resolve auction after multiple attempts")
 		}
 		tx, err = makeAuctionResolutionTx(true)
@@ -658,7 +672,11 @@ func retryUntil(ctx context.Context, operation func() error, retryInterval time.
 			return ctx.Err()
 		}
 
-		time.Sleep(retryInterval)
+		select {
+		case <-time.After(retryInterval):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	return errors.New("operation failed after multiple attempts")
 }

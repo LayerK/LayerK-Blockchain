@@ -229,9 +229,13 @@ func (bv *BidValidator) Start(ctx_in context.Context) {
 	// Thread to set reserve price and clear per-round map of bid count per account.
 	bv.StopWaiter.LaunchThread(func(ctx context.Context) {
 		reservePriceTicker := newRoundTicker(bv.roundTimingInfo)
-		go reservePriceTicker.tickAtReserveSubmissionDeadline()
+		bv.StopWaiter.LaunchUntrackedThread(func() {
+			reservePriceTicker.tickAtReserveSubmissionDeadline(ctx)
+		})
 		auctionCloseTicker := newRoundTicker(bv.roundTimingInfo)
-		go auctionCloseTicker.tickAtAuctionClose()
+		bv.StopWaiter.LaunchUntrackedThread(func() {
+			auctionCloseTicker.tickAtAuctionClose(ctx)
+		})
 
 		for {
 			select {

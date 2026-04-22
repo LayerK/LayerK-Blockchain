@@ -17,8 +17,8 @@ contract CacheManager is Initializable, DelegateCallAware {
     ArbOwnerPublic internal constant ARB_OWNER_PUBLIC = ArbOwnerPublic(address(0x6b));
     ArbWasm internal constant ARB_WASM = ArbWasm(address(0x71));
     ArbWasmCache internal constant ARB_WASM_CACHE = ArbWasmCache(address(0x72));
-    uint64 internal constant MAX_MAKE_SPACE = 5 * 1024 * 1024;
-    uint64 internal constant MIN_CODESIZE = 4096;
+    uint64 public constant MAX_MAKE_SPACE = 5 * 1024 * 1024;
+    uint64 public constant MIN_CODESIZE = 4096;
 
     MinHeapLib.Heap internal bids;
     Entry[] public entries;
@@ -74,7 +74,7 @@ contract CacheManager is Initializable, DelegateCallAware {
     }
 
     /// @notice Disable new bids.
-    function paused() external onlyOwner {
+    function pause() external onlyOwner {
         isPaused = true;
         emit Pause();
     }
@@ -83,6 +83,11 @@ contract CacheManager is Initializable, DelegateCallAware {
     function unpause() external onlyOwner {
         isPaused = false;
         emit Unpause();
+    }
+
+    /// @notice Returns whether new bids are currently paused.
+    function paused() external view returns (bool) {
+        return isPaused;
     }
 
     /// @notice Evicts all programs in the cache.
@@ -129,16 +134,17 @@ contract CacheManager is Initializable, DelegateCallAware {
     /// @notice Returns the minimum bid required to cache a program of the given size.
     ///         Value returned here is the minimum bid that you can send with msg.value
     function getMinBid(uint64 size) public view returns (uint192 min) {
-        if (size > cacheSize) {
-            revert AsmTooLarge(size, 0, cacheSize);
+        uint64 cacheSize_ = cacheSize;
+        if (size > cacheSize_) {
+            revert AsmTooLarge(size, 0, cacheSize_);
         }
 
         size = size >= MIN_CODESIZE ? size : MIN_CODESIZE;
         uint256 totalSize = queueSize + size;
-        if (totalSize <= cacheSize) {
+        if (totalSize <= cacheSize_) {
             return 0;
         }
-        uint256 needToFree = totalSize - cacheSize;
+        uint256 needToFree = totalSize - cacheSize_;
 
         // size is at least MIN_CODESIZE, and vary no more than 10x right now, so we can safely assume
         // for a given size, we need at most need to clear roundUp(size/MIN_CODESIZE) entries to make space
@@ -161,7 +167,8 @@ contract CacheManager is Initializable, DelegateCallAware {
                 ++i;
             }
         }
-        uint256 currentDecay = _calcDecay();
+        // Cache decay once to avoid a repeated SLOAD inside _calcDecay.
+        uint256 currentDecay = block.timestamp * uint256(decay);
         if (min < currentDecay) {
             return 0;
         }

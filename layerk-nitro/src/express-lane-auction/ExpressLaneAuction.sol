@@ -85,6 +85,7 @@ contract ExpressLaneAuction is
         }
         biddingToken = IERC20(args._biddingToken);
 
+        if (args._beneficiary == address(0)) revert ZeroAddress();
         beneficiary = args._beneficiary;
         emit SetBeneficiary(address(0), args._beneficiary);
 
@@ -567,8 +568,8 @@ contract ExpressLaneAuction is
 
     /// @inheritdoc IExpressLaneAuction
     function resolvedRounds() external view returns (ELCRound memory, ELCRound memory) {
-        return latestResolvedRounds[0].round > latestResolvedRounds[1].round
-            ? (latestResolvedRounds[0], latestResolvedRounds[1])
-            : (latestResolvedRounds[1], latestResolvedRounds[0]);
+        ELCRound memory r0 = latestResolvedRounds[0];
+        ELCRound memory r1 = latestResolvedRounds[1];
+        return r0.round > r1.round ? (r0, r1) : (r1, r0);
     }
 }

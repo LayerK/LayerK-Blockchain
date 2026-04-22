@@ -215,7 +215,10 @@ library RoundTimingInfoLib {
         uint64 roundDurationSeconds,
         uint64 round
     ) private pure returns (uint64, uint64) {
-        int64 intRoundStart = offsetTimestamp + int64(roundDurationSeconds * round);
+        // Compute the offset in uint256 to catch overflow before truncating to int64.
+        uint256 roundOffset = uint256(roundDurationSeconds) * uint256(round);
+        require(roundOffset <= uint256(type(int64).max), "Round offset overflows int64");
+        int64 intRoundStart = offsetTimestamp + int64(uint64(roundOffset));
         if (intRoundStart < 0) {
             revert NegativeRoundStart(intRoundStart);
         }

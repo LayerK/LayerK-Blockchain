@@ -13,7 +13,7 @@ library UintUtilsLib {
     /// @param x Cannot be zero, since zero that has no signficant bits
     function leastSignificantBit(
         uint256 x
-    ) internal pure returns (uint256 msb) {
+    ) internal pure returns (uint256 lsb) {
         require(x > 0, "Zero has no significant bits");
 
         // isolate the least sig bit
