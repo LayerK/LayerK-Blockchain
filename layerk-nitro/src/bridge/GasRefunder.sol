@@ -111,10 +111,14 @@ contract GasRefunder is IGasRefunder, Ownable {
     }
 
     function setContractsAllowedImpl(address[] calldata addresses, bool allow) internal {
-        for (uint256 i = 0; i < addresses.length; i++) {
+        uint256 len = addresses.length;
+        for (uint256 i = 0; i < len;) {
             address addr = addresses[i];
             allowedContracts[addr] = allow;
             emit ContractAllowedSet(addr, allow);
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -132,10 +136,14 @@ contract GasRefunder is IGasRefunder, Ownable {
     }
 
     function setRefundeesAllowedImpl(address[] calldata addresses, bool allow) internal {
-        for (uint256 i = 0; i < addresses.length; i++) {
+        uint256 len = addresses.length;
+        for (uint256 i = 0; i < len;) {
             address addr = addresses[i];
             allowedRefundees[addr] = allow;
             emit RefundeeAllowedSet(addr, allow);
+            unchecked {
+                ++i;
+            }
         }
     }
 
