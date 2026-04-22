@@ -110,9 +110,14 @@ func (s *StopWaiterSafe) StopAndWait() error {
 }
 
 func getAllStackTraces() string {
-	buf := make([]byte, 64*1024*1024)
-	size := runtime.Stack(buf, true)
-	return string(buf[:size])
+	// Start with a modest buffer and double until all goroutine stacks fit.
+	for size := 128 * 1024; ; size *= 2 {
+		buf := make([]byte, size)
+		n := runtime.Stack(buf, true)
+		if n < size {
+			return string(buf[:n])
+		}
+	}
 }
 
 func (s *StopWaiterSafe) stopAndWaitImpl(warningTimeout time.Duration) error {

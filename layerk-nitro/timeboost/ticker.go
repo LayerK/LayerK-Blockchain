@@ -1,32 +1,31 @@
 package timeboost
 
 import (
+	"context"
 	"time"
 )
 
 type roundTicker struct {
 	c               chan time.Time
-	done            chan bool
 	roundTimingInfo RoundTimingInfo
 }
 
 func newRoundTicker(roundTimingInfo RoundTimingInfo) *roundTicker {
 	return &roundTicker{
 		c:               make(chan time.Time, 1),
-		done:            make(chan bool),
 		roundTimingInfo: roundTimingInfo,
 	}
 }
 
-func (t *roundTicker) tickAtAuctionClose() {
-	t.start(t.roundTimingInfo.AuctionClosing)
+func (t *roundTicker) tickAtAuctionClose(ctx context.Context) {
+	t.start(ctx, t.roundTimingInfo.AuctionClosing)
 }
 
-func (t *roundTicker) tickAtReserveSubmissionDeadline() {
-	t.start(t.roundTimingInfo.AuctionClosing + t.roundTimingInfo.ReserveSubmission)
+func (t *roundTicker) tickAtReserveSubmissionDeadline(ctx context.Context) {
+	t.start(ctx, t.roundTimingInfo.AuctionClosing+t.roundTimingInfo.ReserveSubmission)
 }
 
-func (t *roundTicker) start(timeBeforeRoundStart time.Duration) {
+func (t *roundTicker) start(ctx context.Context, timeBeforeRoundStart time.Duration) {
 	for {
 		nextTick := t.roundTimingInfo.TimeTilNextRound() - timeBeforeRoundStart
 		if nextTick < 0 {
@@ -36,7 +35,7 @@ func (t *roundTicker) start(timeBeforeRoundStart time.Duration) {
 		select {
 		case <-time.After(nextTick):
 			t.c <- time.Now()
-		case <-t.done:
+		case <-ctx.Done():
 			close(t.c)
 			return
 		}

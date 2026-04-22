@@ -252,11 +252,15 @@ func (els *ExpressLaneSubmission) Sender() (common.Address, error) {
 	return els.sender, nil
 }
 
-// Helper function to pad a big integer to 32 bytes
+// Helper function to pad a big integer to 32 bytes.
+// Panics if the value exceeds 32 bytes (> uint256 max) — callers must validate upstream.
 func padBigInt(bi *big.Int) []byte {
 	bb := bi.Bytes()
-	padded := make([]byte, 32-len(bb), 32)
-	padded = append(padded, bb...)
+	if len(bb) > 32 {
+		panic(fmt.Sprintf("padBigInt: value exceeds 32 bytes (%d bytes)", len(bb)))
+	}
+	padded := make([]byte, 32)
+	copy(padded[32-len(bb):], bb)
 	return padded
 }
 

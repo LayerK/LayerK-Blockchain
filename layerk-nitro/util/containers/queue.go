@@ -3,40 +3,47 @@
 
 package containers
 
-// Queue of an arbitrary type backed by a slice which is shrunk when it grows too large
+// Queue is a FIFO queue backed by a ring-buffer slice for O(1) push and pop.
 type Queue[T any] struct {
 	slice []T
+	head  int
+	count int
 }
 
 func (q *Queue[T]) Push(item T) {
-	q.slice = append(q.slice, item)
+	if q.count == len(q.slice) {
+		q.grow()
+	}
+	tail := (q.head + q.count) % len(q.slice)
+	q.slice[tail] = item
+	q.count++
 }
 
-// If cap(slice) >= len(slice)*shrinkRatio && cap(slice) >= shrinkMinimum,
-// shrink the slice capacity back down to twice its length by re-allocating it.
-const shrinkRatio = 16
-const shrinkMinimum = 512
-
-func (q *Queue[T]) shrink() {
-	if cap(q.slice) >= len(q.slice)*shrinkRatio && cap(q.slice) >= shrinkMinimum {
-		oldSlice := q.slice
-		q.slice = make([]T, len(oldSlice), len(oldSlice)*2)
-		copy(q.slice, oldSlice)
+func (q *Queue[T]) grow() {
+	newCap := 8
+	if len(q.slice) > 0 {
+		newCap = len(q.slice) * 2
 	}
+	newSlice := make([]T, newCap)
+	for i := 0; i < q.count; i++ {
+		newSlice[i] = q.slice[(q.head+i)%len(q.slice)]
+	}
+	q.slice = newSlice
+	q.head = 0
 }
 
 func (q *Queue[T]) Pop() T {
 	var empty T
-	if len(q.slice) == 0 {
+	if q.count == 0 {
 		return empty
 	}
-	item := q.slice[0]
-	q.slice[0] = empty
-	q.slice = q.slice[1:]
-	q.shrink()
+	item := q.slice[q.head]
+	q.slice[q.head] = empty // release reference for GC
+	q.head = (q.head + 1) % len(q.slice)
+	q.count--
 	return item
 }
 
 func (q *Queue[T]) Len() int {
-	return len(q.slice)
+	return q.count
 }
