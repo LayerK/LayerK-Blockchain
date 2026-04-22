@@ -481,13 +481,16 @@ abstract contract AbsRollupUserLogic is
     function removeOldZombies(uint256 startIndex) public onlyValidator whenNotPaused {
         uint256 currentZombieCount = zombieCount();
         uint256 latestConfirmedNum = latestConfirmed();
-        for (uint256 i = startIndex; i < currentZombieCount; i++) {
+        for (uint256 i = startIndex; i < currentZombieCount;) {
             while (zombieLatestStakedNode(i) < latestConfirmedNum) {
                 removeZombie(i);
                 currentZombieCount--;
                 if (i >= currentZombieCount) {
                     return;
                 }
+            }
+            unchecked {
+                ++i;
             }
         }
     }

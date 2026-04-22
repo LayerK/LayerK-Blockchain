@@ -305,14 +305,17 @@ type MerkleProof struct {
 func (proof *MerkleProof) IsCorrect() bool {
 	hash := proof.LeafHash
 	index := proof.LeafIndex
+	var buf [64]byte
 	for _, hashFromProof := range proof.Proof {
-
 		if index&1 == 0 {
-			hash = crypto.Keccak256Hash(hash.Bytes(), hashFromProof.Bytes())
+			copy(buf[:32], hash[:])
+			copy(buf[32:], hashFromProof[:])
 		} else {
-			hash = crypto.Keccak256Hash(hashFromProof.Bytes(), hash.Bytes())
+			copy(buf[:32], hashFromProof[:])
+			copy(buf[32:], hash[:])
 		}
-		index = index / 2
+		hash = crypto.Keccak256Hash(buf[:])
+		index >>= 1
 	}
 	if index != 0 {
 		return false
