@@ -45,7 +45,7 @@ contract ERC20Inbox is AbsInbox, IERC20Inbox {
     /// @inheritdoc IERC20Inbox
     function depositERC20(
         uint256 amount
-    ) public whenNotPaused onlyAllowed returns (uint256) {
+    ) public whenNotPaused onlyAllowedSender returns (uint256) {
         address dest = msg.sender;
 
         // solhint-disable-next-line avoid-tx-origin
@@ -71,7 +71,7 @@ contract ERC20Inbox is AbsInbox, IERC20Inbox {
         uint256 maxFeePerGas,
         uint256 tokenTotalFeeAmount,
         bytes calldata data
-    ) external whenNotPaused onlyAllowed returns (uint256) {
+    ) external whenNotPaused onlyAllowedSender returns (uint256) {
         return _createRetryableTicket(
             to,
             l2CallValue,
@@ -96,7 +96,7 @@ contract ERC20Inbox is AbsInbox, IERC20Inbox {
         uint256 maxFeePerGas,
         uint256 tokenTotalFeeAmount,
         bytes calldata data
-    ) public whenNotPaused onlyAllowed returns (uint256) {
+    ) public whenNotPaused onlyAllowedSender returns (uint256) {
         return _unsafeCreateRetryableTicket(
             to,
             l2CallValue,

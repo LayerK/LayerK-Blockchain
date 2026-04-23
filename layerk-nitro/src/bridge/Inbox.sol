@@ -51,7 +51,7 @@ contract Inbox is AbsInbox, IInbox {
         uint256 nonce,
         address to,
         bytes calldata data
-    ) external payable whenNotPaused onlyAllowed returns (uint256) {
+    ) external payable whenNotPaused onlyAllowedSender returns (uint256) {
         // arbos will discard unsigned tx with gas limit too large
         if (gasLimit > type(uint64).max) {
             revert GasLimitTooLarge();
@@ -78,7 +78,7 @@ contract Inbox is AbsInbox, IInbox {
         uint256 maxFeePerGas,
         address to,
         bytes calldata data
-    ) external payable whenNotPaused onlyAllowed returns (uint256) {
+    ) external payable whenNotPaused onlyAllowedSender returns (uint256) {
         // arbos will discard unsigned tx with gas limit too large
         if (gasLimit > type(uint64).max) {
             revert GasLimitTooLarge();
@@ -105,7 +105,7 @@ contract Inbox is AbsInbox, IInbox {
         uint256 nonce,
         address to,
         bytes calldata data
-    ) external payable whenNotPaused onlyAllowed returns (uint256) {
+    ) external payable whenNotPaused onlyAllowedSender returns (uint256) {
         if (!_chainIdChanged()) revert NotForked();
         // solhint-disable-next-line avoid-tx-origin
         if (msg.sender != tx.origin) revert NotOrigin();
@@ -139,7 +139,7 @@ contract Inbox is AbsInbox, IInbox {
         address to,
         uint256 value,
         bytes calldata data
-    ) external whenNotPaused onlyAllowed returns (uint256) {
+    ) external whenNotPaused onlyAllowedSender returns (uint256) {
         if (!_chainIdChanged()) revert NotForked();
         // solhint-disable-next-line avoid-tx-origin
         if (msg.sender != tx.origin) revert NotOrigin();
@@ -172,7 +172,7 @@ contract Inbox is AbsInbox, IInbox {
         uint256 nonce,
         uint256 value,
         address withdrawTo
-    ) external whenNotPaused onlyAllowed returns (uint256) {
+    ) external whenNotPaused onlyAllowedSender returns (uint256) {
         if (!_chainIdChanged()) revert NotForked();
         // solhint-disable-next-line avoid-tx-origin
         if (msg.sender != tx.origin) revert NotOrigin();
@@ -199,7 +199,7 @@ contract Inbox is AbsInbox, IInbox {
     }
 
     /// @inheritdoc IInbox
-    function depositEth() public payable whenNotPaused onlyAllowed returns (uint256) {
+    function depositEth() public payable whenNotPaused onlyAllowedSender returns (uint256) {
         address dest = msg.sender;
 
         // solhint-disable-next-line avoid-tx-origin
@@ -216,7 +216,7 @@ contract Inbox is AbsInbox, IInbox {
     /// @notice deprecated in favour of depositEth with no parameters
     function depositEth(
         uint256
-    ) external payable whenNotPaused onlyAllowed returns (uint256) {
+    ) external payable whenNotPaused onlyAllowedSender returns (uint256) {
         return depositEth();
     }
 
@@ -243,7 +243,7 @@ contract Inbox is AbsInbox, IInbox {
         uint256 gasLimit,
         uint256 maxFeePerGas,
         bytes calldata data
-    ) external payable whenNotPaused onlyAllowed returns (uint256) {
+    ) external payable whenNotPaused onlyAllowedSender returns (uint256) {
         // gas limit is validated to be within uint64 in unsafeCreateRetryableTicket
         return unsafeCreateRetryableTicket(
             to,
@@ -267,7 +267,7 @@ contract Inbox is AbsInbox, IInbox {
         uint256 gasLimit,
         uint256 maxFeePerGas,
         bytes calldata data
-    ) external payable whenNotPaused onlyAllowed returns (uint256) {
+    ) external payable whenNotPaused onlyAllowedSender returns (uint256) {
         return _createRetryableTicket(
             to,
             l2CallValue,
@@ -291,7 +291,7 @@ contract Inbox is AbsInbox, IInbox {
         uint256 gasLimit,
         uint256 maxFeePerGas,
         bytes calldata data
-    ) public payable whenNotPaused onlyAllowed returns (uint256) {
+    ) public payable whenNotPaused onlyAllowedSender returns (uint256) {
         return _unsafeCreateRetryableTicket(
             to,
             l2CallValue,
