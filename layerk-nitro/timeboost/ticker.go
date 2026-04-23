@@ -34,7 +34,14 @@ func (t *roundTicker) start(ctx context.Context, timeBeforeRoundStart time.Durat
 
 		select {
 		case <-time.After(nextTick):
-			t.c <- time.Now()
+			// The channel is buffered (cap 1) so a slow consumer must not wedge the
+			// ticker goroutine past ctx cancellation.
+			select {
+			case t.c <- time.Now():
+			case <-ctx.Done():
+				close(t.c)
+				return
+			}
 		case <-ctx.Done():
 			close(t.c)
 			return
