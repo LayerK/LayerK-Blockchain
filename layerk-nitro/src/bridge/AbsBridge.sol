@@ -229,9 +229,13 @@ abstract contract AbsBridge is Initializable, DelegateCallAware, IBridge {
             allowedDelayedInboxesMap[inbox] = InOutInfo(allowedDelayedInboxList.length, true);
             allowedDelayedInboxList.push(inbox);
         } else {
-            address lastInbox = allowedDelayedInboxList[allowedDelayedInboxList.length - 1];
-            allowedDelayedInboxList[info.index] = lastInbox;
-            allowedDelayedInboxesMap[lastInbox].index = info.index;
+            uint256 removedIndex = info.index;
+            uint256 lastIndex = allowedDelayedInboxList.length - 1;
+            if (removedIndex != lastIndex) {
+                address lastInbox = allowedDelayedInboxList[lastIndex];
+                allowedDelayedInboxList[removedIndex] = lastInbox;
+                allowedDelayedInboxesMap[lastInbox].index = removedIndex;
+            }
             allowedDelayedInboxList.pop();
             delete allowedDelayedInboxesMap[inbox];
         }
@@ -250,9 +254,13 @@ abstract contract AbsBridge is Initializable, DelegateCallAware, IBridge {
             allowedOutboxesMap[outbox] = InOutInfo(allowedOutboxList.length, true);
             allowedOutboxList.push(outbox);
         } else {
-            address lastOutbox = allowedOutboxList[allowedOutboxList.length - 1];
-            allowedOutboxList[info.index] = lastOutbox;
-            allowedOutboxesMap[lastOutbox].index = info.index;
+            uint256 removedIndex = info.index;
+            uint256 lastIndex = allowedOutboxList.length - 1;
+            if (removedIndex != lastIndex) {
+                address lastOutbox = allowedOutboxList[lastIndex];
+                allowedOutboxList[removedIndex] = lastOutbox;
+                allowedOutboxesMap[lastOutbox].index = removedIndex;
+            }
             allowedOutboxList.pop();
             delete allowedOutboxesMap[outbox];
         }
