@@ -329,7 +329,9 @@ contract ExpressLaneAuction is
             revert ZeroAmount();
         }
         beneficiaryBalance = 0;
-        biddingToken.safeTransfer(beneficiary, bal);
+        address beneficiary_ = beneficiary;
+        biddingToken.safeTransfer(beneficiary_, bal);
+        emit BeneficiaryBalanceFlushed(beneficiary_, bal);
     }
 
     /// @dev Update local state to resolve an auction
@@ -514,11 +516,11 @@ contract ExpressLaneAuction is
     ) external {
         // if a transferor has already been set, it may be fixed until a future round
         Transferor storage currentTransferor = transferorOf[msg.sender];
-        uint64 currentRound_ = roundTimingInfo.currentRound();
-        if (
-            currentTransferor.addr != address(0) && currentTransferor.fixedUntilRound > currentRound_
-        ) {
-            revert FixedTransferor(currentTransferor.fixedUntilRound);
+        if (currentTransferor.addr != address(0)) {
+            uint64 currentRound_ = roundTimingInfo.currentRound();
+            if (currentTransferor.fixedUntilRound > currentRound_) {
+                revert FixedTransferor(currentTransferor.fixedUntilRound);
+            }
         }
 
         transferorOf[msg.sender] = transferor;

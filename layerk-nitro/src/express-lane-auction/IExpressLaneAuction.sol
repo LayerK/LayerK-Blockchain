@@ -143,6 +143,11 @@ interface IExpressLaneAuction is IAccessControlEnumerableUpgradeable, IERC165Upg
     /// @param newBeneficiary The new beneficiary
     event SetBeneficiary(address oldBeneficiary, address newBeneficiary);
 
+    /// @notice Unflushed beneficiary balance was transferred to the beneficiary
+    /// @param beneficiary The beneficiary that received the funds
+    /// @param amount The amount that was flushed
+    event BeneficiaryBalanceFlushed(address indexed beneficiary, uint256 amount);
+
     /// @notice A new round timing info has been set
     /// @param currentRound The round during which the timing info was set
     /// @param offsetTimestamp The new offset timestamp
