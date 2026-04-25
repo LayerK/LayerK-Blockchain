@@ -249,7 +249,8 @@ abstract contract AbsOutbox is DelegateCallAware, IOutbox {
     function recordOutputAsSpent(bytes32[] calldata proof, uint256 index, bytes32 item) internal {
         uint256 proofLength = proof.length;
         if (proofLength >= 256) revert ProofTooLong(proofLength);
-        if (index >= 2 ** proofLength) revert PathNotMinimal(index, 2 ** proofLength);
+        uint256 maxIndex = 1 << proofLength;
+        if (index >= maxIndex) revert PathNotMinimal(index, maxIndex);
 
         // Hash the leaf an extra time to prove it's a leaf
         bytes32 calcRoot = MerkleLib.calculateRoot(proof, index, keccak256(abi.encodePacked(item)));
