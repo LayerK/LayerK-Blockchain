@@ -113,11 +113,12 @@ abstract contract AbsBridge is Initializable, DelegateCallAware, IBridge {
         onlySequencerInbox
         returns (uint256 seqMessageIndex, bytes32 beforeAcc, bytes32 delayedAcc, bytes32 acc)
     {
+        uint256 reportedSubMessageCount = sequencerReportedSubMessageCount;
         if (
-            sequencerReportedSubMessageCount != prevMessageCount && prevMessageCount != 0
-                && sequencerReportedSubMessageCount != 0
+            reportedSubMessageCount != prevMessageCount && prevMessageCount != 0
+                && reportedSubMessageCount != 0
         ) {
-            revert BadSequencerMessageNumber(sequencerReportedSubMessageCount, prevMessageCount);
+            revert BadSequencerMessageNumber(reportedSubMessageCount, prevMessageCount);
         }
         sequencerReportedSubMessageCount = newMessageCount;
         seqMessageIndex = sequencerInboxAccs.length;
