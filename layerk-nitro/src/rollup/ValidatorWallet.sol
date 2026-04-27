@@ -115,12 +115,13 @@ contract ValidatorWallet is OwnableUpgradeable, DelegateCallAware, GasRefundEnab
         if (numTxes != destination.length) revert BadArrayLength(numTxes, destination.length);
         if (numTxes != amount.length) revert BadArrayLength(numTxes, amount.length);
 
-        for (uint256 i = 0; i < numTxes; i++) {
-            if (data[i].length > 0) require(destination[i].isContract(), "NO_CODE_AT_ADDR");
-            validateExecuteTransaction(destination[i]);
+        for (uint256 i = 0; i < numTxes; ) {
+            address dest = destination[i];
+            if (data[i].length > 0) require(dest.isContract(), "NO_CODE_AT_ADDR");
+            validateExecuteTransaction(dest);
             // We use a low level call here to allow for contract and non-contract calls
             // solhint-disable-next-line avoid-low-level-calls
-            (bool success, ) = address(destination[i]).call{value: amount[i]}(data[i]);
+            (bool success, ) = dest.call{value: amount[i]}(data[i]);
             if (!success) {
                 assembly {
                     let ptr := mload(0x40)
@@ -128,6 +129,9 @@ contract ValidatorWallet is OwnableUpgradeable, DelegateCallAware, GasRefundEnab
                     returndatacopy(ptr, 0, size)
                     revert(ptr, size)
                 }
+            }
+            unchecked {
+                ++i;
             }
         }
     }
@@ -171,13 +175,16 @@ contract ValidatorWallet is OwnableUpgradeable, DelegateCallAware, GasRefundEnab
         uint64[] calldata challenges
     ) public onlyExecutorOrOwner refundsGas(gasRefunder, IReader4844(address(0))) {
         uint256 challengesCount = challenges.length;
-        for (uint256 i = 0; i < challengesCount; i++) {
+        for (uint256 i = 0; i < challengesCount; ) {
             try manager.timeout(challenges[i]) {} catch (bytes memory error) {
                 if (error.length == 0) {
                     // Assume out of gas
                     // We need to revert here so gas estimation works
                     require(false, "GAS");
                 }
+            }
+            unchecked {
+                ++i;
             }
         }
     }
