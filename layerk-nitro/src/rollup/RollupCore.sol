@@ -229,7 +229,8 @@ abstract contract RollupCore is IRollupCore, PausableUpgradeable {
     }
 
     function isZombie(address staker) public view override returns (bool) {
-        for (uint256 i = 0; i < _zombies.length; i++) {
+        uint256 zombiesLen = _zombies.length;
+        for (uint256 i = 0; i < zombiesLen; i++) {
             if (staker == _zombies[i].stakerAddress) {
                 return true;
             }
@@ -439,7 +440,10 @@ abstract contract RollupCore is IRollupCore, PausableUpgradeable {
      * @param zombieNum Index of the zombie to remove
      */
     function removeZombie(uint256 zombieNum) internal {
-        _zombies[zombieNum] = _zombies[_zombies.length - 1];
+        uint256 lastIndex = _zombies.length - 1;
+        if (zombieNum != lastIndex) {
+            _zombies[zombieNum] = _zombies[lastIndex];
+        }
         _zombies.pop();
     }
 
@@ -544,8 +548,12 @@ abstract contract RollupCore is IRollupCore, PausableUpgradeable {
         Staker storage staker = _stakerMap[stakerAddress];
         require(staker.isStaked, "NOT_STAKED");
         uint64 stakerIndex = staker.index;
-        _stakerList[stakerIndex] = _stakerList[_stakerList.length - 1];
-        _stakerMap[_stakerList[stakerIndex]].index = stakerIndex;
+        uint256 lastIndex = _stakerList.length - 1;
+        if (uint256(stakerIndex) != lastIndex) {
+            address lastStaker = _stakerList[lastIndex];
+            _stakerList[stakerIndex] = lastStaker;
+            _stakerMap[lastStaker].index = stakerIndex;
+        }
         _stakerList.pop();
         delete _stakerMap[stakerAddress];
     }
