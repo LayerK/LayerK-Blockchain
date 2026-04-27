@@ -72,7 +72,7 @@ interface IInboxBase is IDelayedMessageProvider {
     function unpause() external;
 
     /// @notice add or remove users from allowList
-    function setAllowList(address[] memory user, bool[] memory val) external;
+    function setAllowList(address[] calldata user, bool[] calldata val) external;
 
     /// @notice enable or disable allowList
     function setAllowListEnabled(

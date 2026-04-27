@@ -59,13 +59,15 @@ abstract contract AbsInbox is DelegateCallAware, PausableUpgradeable, IInboxBase
     event AllowListEnabledUpdated(bool isEnabled);
 
     /// @inheritdoc IInboxBase
-    function setAllowList(address[] memory user, bool[] memory val) external onlyRollupOrOwner {
+    function setAllowList(address[] calldata user, bool[] calldata val) external onlyRollupOrOwner {
         uint256 userCount = user.length;
         require(userCount == val.length, "INVALID_INPUT");
 
         for (uint256 i = 0; i < userCount;) {
-            isAllowed[user[i]] = val[i];
-            emit AllowListAddressSet(user[i], val[i]);
+            address u = user[i];
+            bool v = val[i];
+            isAllowed[u] = v;
+            emit AllowListAddressSet(u, v);
             unchecked {
                 ++i;
             }

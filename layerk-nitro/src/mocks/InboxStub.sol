@@ -193,7 +193,7 @@ contract InboxStub is IInboxBase, IInbox {
         revert("NOT_IMPLEMENTED");
     }
 
-    function setAllowList(address[] memory, bool[] memory) external pure {
+    function setAllowList(address[] calldata, bool[] calldata) external pure {
         revert("NOT_IMPLEMENTED");
     }
 
