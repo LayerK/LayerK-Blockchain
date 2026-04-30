@@ -229,6 +229,49 @@ abstract contract AbsInboxTest is Test {
         vm.etch(user, bytes(""));
     }
 
+    function test_sendL2MessageFromOrigin_AllowedEOA_Succeeds() public {
+        address[] memory users = new address[](1);
+        users[0] = user;
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(rollup);
+        inbox.setAllowList(users, allowed);
+        vm.prank(rollup);
+        inbox.setAllowListEnabled(true);
+
+        vm.expectEmit(true, true, true, true);
+        emit InboxMessageDeliveredFromOrigin(0);
+
+        // allowed EOA calling directly: tx.origin == msg.sender, no code
+        vm.prank(user, user);
+        uint256 msgNum = inbox.sendL2MessageFromOrigin(abi.encodePacked("some msg"));
+
+        assertEq(msgNum, 0, "Invalid msgNum");
+        assertEq(bridge.delayedMessageCount(), 1, "Invalid delayed message count");
+    }
+
+    function test_sendL2MessageFromOrigin_AllowedOriginViaContract_RevertsCodeless() public {
+        // Allow the EOA (tx.origin) in the allow list, but call through a contract.
+        // The codeless-origin check fires BEFORE the allow-list check so the revert
+        // must be NotCodelessOrigin, not NotAllowedOrigin.
+        address[] memory users = new address[](1);
+        users[0] = user;
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(rollup);
+        inbox.setAllowList(users, allowed);
+        vm.prank(rollup);
+        inbox.setAllowListEnabled(true);
+
+        OriginSender originSender = new OriginSender();
+        // tx.origin = user (allow-listed EOA), msg.sender = contract
+        vm.expectRevert(abi.encodeWithSelector(NotCodelessOrigin.selector));
+        vm.prank(user, user);
+        originSender.sendL2MessageFromOrigin(inbox, abi.encodePacked("some msg"));
+    }
+
     function test_sendL2Message() public {
         // L2 msg params
         bytes memory data = abi.encodePacked("some msg");
@@ -450,6 +493,63 @@ abstract contract AbsInboxTest is Test {
         inbox.sendContractTransaction(tooBigGasLimit, 10, user, 10, abi.encodePacked("data"));
     }
 
+    function test_sendL2Message_AllowedContract_Succeeds() public {
+        Sender sender = new Sender();
+
+        address[] memory users = new address[](1);
+        users[0] = address(sender);
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(rollup);
+        inbox.setAllowList(users, allowed);
+        vm.prank(rollup);
+        inbox.setAllowListEnabled(true);
+
+        // contract is explicitly allow-listed by msg.sender, so it should succeed
+        uint256 msgNum = sender.sendL2Message(inbox, abi.encodePacked("some msg"));
+        assertEq(msgNum, 0, "Invalid msgNum");
+        assertEq(bridge.delayedMessageCount(), 1, "Invalid delayed message count");
+    }
+
+    function test_sendUnsignedTransaction_AllowedContract_Succeeds() public {
+        Sender sender = new Sender();
+
+        address[] memory users = new address[](1);
+        users[0] = address(sender);
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(rollup);
+        inbox.setAllowList(users, allowed);
+        vm.prank(rollup);
+        inbox.setAllowListEnabled(true);
+
+        uint256 msgNum =
+            sender.sendUnsignedTransaction(inbox, 100_000, 1 gwei, 0, user, 0, abi.encodePacked("data"));
+        assertEq(msgNum, 0, "Invalid msgNum");
+        assertEq(bridge.delayedMessageCount(), 1, "Invalid delayed message count");
+    }
+
+    function test_sendContractTransaction_AllowedContract_Succeeds() public {
+        Sender sender = new Sender();
+
+        address[] memory users = new address[](1);
+        users[0] = address(sender);
+        bool[] memory allowed = new bool[](1);
+        allowed[0] = true;
+
+        vm.prank(rollup);
+        inbox.setAllowList(users, allowed);
+        vm.prank(rollup);
+        inbox.setAllowListEnabled(true);
+
+        uint256 msgNum =
+            sender.sendContractTransaction(inbox, 100_000, 1 gwei, user, 0, abi.encodePacked("data"));
+        assertEq(msgNum, 0, "Invalid msgNum");
+        assertEq(bridge.delayedMessageCount(), 1, "Invalid delayed message count");
+    }
+
     /**
      *
      * Event declarations
@@ -487,5 +587,13 @@ contract Sender {
         bytes memory data
     ) external returns (uint256) {
         return _inbox.sendContractTransaction(gasLimit, maxFeePerGas, to, value, data);
+    }
+}
+
+/// @dev Helper that forwards sendL2MessageFromOrigin calls from a contract context so that
+///      msg.sender != tx.origin, exercising the codeless-origin rejection path.
+contract OriginSender {
+    function sendL2MessageFromOrigin(IInboxBase _inbox, bytes memory data) external returns (uint256) {
+        return _inbox.sendL2MessageFromOrigin(data);
     }
 }
