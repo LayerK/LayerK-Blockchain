@@ -71,15 +71,19 @@ interface IInboxBase is IDelayedMessageProvider {
     /// @notice unpauses all inbox functionality
     function unpause() external;
 
-    /// @notice add or remove users from allowList
+    /// @notice add or remove addresses from the allowList
+    /// @dev The allow list is keyed on msg.sender for all entrypoints except sendL2MessageFromOrigin,
+    ///      which keys on tx.origin (but also requires the caller to be a codeless EOA). Contracts
+    ///      that call through a forwarder or multisig must be added by their contract address, not
+    ///      the EOA owner's address.
     function setAllowList(address[] calldata user, bool[] calldata val) external;
 
-    /// @notice enable or disable allowList
+    /// @notice enable or disable the allowList
     function setAllowListEnabled(
         bool _allowListEnabled
     ) external;
 
-    /// @notice check if user is in allowList
+    /// @notice check if an address is in the allowList
     function isAllowed(
         address user
     ) external view returns (bool);
