@@ -297,7 +297,7 @@ contract SequencerInbox is DelegateCallAware, GasRefundEnabled, ISequencerInbox 
             beforeAcc,
             afterAcc,
             delayedAcc,
-            totalDelayedMessagesRead,
+            __totalDelayedMessagesRead,
             timeBounds,
             IBridge.BatchDataLocation.NoData
         );
@@ -401,7 +401,7 @@ contract SequencerInbox is DelegateCallAware, GasRefundEnabled, ISequencerInbox 
             beforeAcc,
             afterAcc,
             delayedAcc,
-            totalDelayedMessagesRead,
+            afterDelayedMessagesRead,
             timeBounds,
             IBridge.BatchDataLocation.Blob
         );
@@ -446,7 +446,7 @@ contract SequencerInbox is DelegateCallAware, GasRefundEnabled, ISequencerInbox 
             beforeAcc,
             afterAcc,
             delayedAcc,
-            totalDelayedMessagesRead,
+            afterDelayedMessagesRead,
             timeBounds,
             isFromCodelessOrigin ? IBridge.BatchDataLocation.TxInput : IBridge.BatchDataLocation.SeparateBatchEvent
         );
