@@ -586,10 +586,11 @@ abstract contract AbsRollupUserLogic is
     function countStakedZombies(uint64 nodeNum) public view override returns (uint256) {
         uint256 currentZombieCount = zombieCount();
         uint256 stakedZombieCount = 0;
-        for (uint256 i = 0; i < currentZombieCount; i++) {
+        for (uint256 i = 0; i < currentZombieCount;) {
             if (nodeHasStaker(nodeNum, zombieAddress(i))) {
-                stakedZombieCount++;
+                unchecked { ++stakedZombieCount; }
             }
+            unchecked { ++i; }
         }
         return stakedZombieCount;
     }
@@ -607,15 +608,16 @@ abstract contract AbsRollupUserLogic is
     function countZombiesStakedOnChildren(uint64 nodeNum) public view override returns (uint256) {
         uint256 currentZombieCount = zombieCount();
         uint256 stakedZombieCount = 0;
-        for (uint256 i = 0; i < currentZombieCount; i++) {
+        for (uint256 i = 0; i < currentZombieCount;) {
             Zombie storage zombie = getZombieStorage(i);
             // If this zombie is staked on this node, but its _latest_ staked node isn't this node,
             // then it must be staked on a child of this node.
             if (
                 zombie.latestStakedNode != nodeNum && nodeHasStaker(nodeNum, zombie.stakerAddress)
             ) {
-                stakedZombieCount++;
+                unchecked { ++stakedZombieCount; }
             }
+            unchecked { ++i; }
         }
         return stakedZombieCount;
     }
