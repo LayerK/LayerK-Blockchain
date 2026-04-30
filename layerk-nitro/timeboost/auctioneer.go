@@ -76,6 +76,7 @@ type AuctioneerServerConfig struct {
 	DbDirectory               string                   `koanf:"db-directory"`
 	AuctionResolutionWaitTime time.Duration            `koanf:"auction-resolution-wait-time"`
 	S3Storage                 S3StorageServiceConfig   `koanf:"s3-storage"`
+	BidsReceiverCapacity      int                      `koanf:"bids-receiver-capacity"`
 }
 
 var DefaultAuctioneerConsumerConfig = pubsub.ConsumerConfig{
@@ -92,6 +93,7 @@ var DefaultAuctioneerServerConfig = AuctioneerServerConfig{
 	StreamTimeout:             10 * time.Minute,
 	AuctionResolutionWaitTime: 2 * time.Second,
 	S3Storage:                 DefaultS3StorageServiceConfig,
+	BidsReceiverCapacity:      100_000,
 }
 
 var TestAuctioneerServerConfig = AuctioneerServerConfig{
@@ -100,6 +102,7 @@ var TestAuctioneerServerConfig = AuctioneerServerConfig{
 	ConsumerConfig:            DefaultAuctioneerConsumerConfig,
 	StreamTimeout:             time.Minute,
 	AuctionResolutionWaitTime: 2 * time.Second,
+	BidsReceiverCapacity:      100_000,
 }
 
 func AuctioneerServerConfigAddOptions(prefix string, f *pflag.FlagSet) {
@@ -115,6 +118,7 @@ func AuctioneerServerConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.String(prefix+".auction-contract-address", DefaultAuctioneerServerConfig.AuctionContractAddress, "express lane auction contract address")
 	f.String(prefix+".db-directory", DefaultAuctioneerServerConfig.DbDirectory, "path to database directory for persisting validated bids in a sqlite file")
 	f.Duration(prefix+".auction-resolution-wait-time", DefaultAuctioneerServerConfig.AuctionResolutionWaitTime, "wait time after auction closing before resolving the auction")
+	f.Int(prefix+".bids-receiver-capacity", DefaultAuctioneerServerConfig.BidsReceiverCapacity, "capacity of the internal bids receiver channel")
 	S3StorageServiceConfigAddOptions(prefix+".s3-storage", f)
 }
 
@@ -245,7 +249,7 @@ func NewAuctioneerServer(ctx context.Context, configFetcher AuctioneerServerConf
 		auctionContract:                auctionContract,
 		auctionContractAddr:            auctionContractAddr,
 		auctionContractDomainSeparator: domainSeparator,
-		bidsReceiver:                   make(chan *JsonValidatedBid, 100_000), // TODO(Terence): Is 100k enough? Make this configurable?
+		bidsReceiver:                   make(chan *JsonValidatedBid, cfg.BidsReceiverCapacity),
 		bidCache:                       newBidCache(domainSeparator),
 		roundTimingInfo:                *roundTimingInfo,
 		auctionResolutionWaitTime:      cfg.AuctionResolutionWaitTime,
