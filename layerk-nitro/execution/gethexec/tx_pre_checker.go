@@ -39,6 +39,10 @@ const TxPreCheckerStrictnessAlwaysCompatible uint = 10
 const TxPreCheckerStrictnessLikelyCompatible uint = 20
 const TxPreCheckerStrictnessFullValidation uint = 30
 
+// maxBlockTraversalHardLimit caps how many blocks we walk back when RequiredStateMaxBlocks is 0 (unlimited).
+// Without this, a misconfigured or malicious node could trigger unbounded block header fetches.
+const maxBlockTraversalHardLimit uint = 1000
+
 type TxPreCheckerConfig struct {
 	Strictness             uint  `koanf:"strictness" reload:"hot"`
 	RequiredStateAge       int64 `koanf:"required-state-age" reload:"hot"`
@@ -167,9 +171,13 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 			oldHeader := header
 			blocksTraversed := uint(0)
 			// find a block that's old enough
+			maxBlocks := config.RequiredStateMaxBlocks
+			if maxBlocks == 0 || maxBlocks > maxBlockTraversalHardLimit {
+				maxBlocks = maxBlockTraversalHardLimit
+			}
 			// #nosec G115
 			for now-int64(oldHeader.Time) < config.RequiredStateAge &&
-				(config.RequiredStateMaxBlocks <= 0 || blocksTraversed < config.RequiredStateMaxBlocks) &&
+				blocksTraversed < maxBlocks &&
 				oldHeader.Number.Uint64() > 0 {
 				previousHeader := bc.GetHeader(oldHeader.ParentHash, oldHeader.Number.Uint64()-1)
 				if previousHeader == nil {
