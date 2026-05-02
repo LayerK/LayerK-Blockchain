@@ -639,10 +639,11 @@ func (s *Sequencer) publishTransactionToQueue(queueCtx context.Context, tx *type
 	// And hard threshold was enabled, this prevents spamming of read locks when not needed
 	if s.l1Reader != nil && config.ExpectedSurplusHardThreshold != "default" {
 		s.expectedSurplusMutex.RLock()
-		if s.expectedSurplusUpdated && s.expectedSurplus < int64(config.expectedSurplusHardThreshold) {
+		belowThreshold := s.expectedSurplusUpdated && s.expectedSurplus < int64(config.expectedSurplusHardThreshold)
+		s.expectedSurplusMutex.RUnlock()
+		if belowThreshold {
 			return errors.New("currently not accepting transactions due to expected surplus being below threshold")
 		}
-		s.expectedSurplusMutex.RUnlock()
 	}
 
 	sequencerBacklogGauge.Inc(1)
