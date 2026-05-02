@@ -44,6 +44,14 @@ func (q *Queue[T]) Pop() T {
 	return item
 }
 
+func (q *Queue[T]) Peek() (T, bool) {
+	var empty T
+	if q.count == 0 {
+		return empty, false
+	}
+	return q.slice[q.head], true
+}
+
 func (q *Queue[T]) Len() int {
 	return q.count
 }
