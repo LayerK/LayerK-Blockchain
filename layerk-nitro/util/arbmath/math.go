@@ -223,18 +223,22 @@ func BigSubByUint(minuend *big.Int, subtrahend uint64) *big.Int {
 
 // BigMulByFrac multiply a huge by a rational
 func BigMulByFrac(value *big.Int, numerator, denominator int64) *big.Int {
-	value = new(big.Int).Set(value)
-	value.Mul(value, big.NewInt(numerator))
-	value.Div(value, big.NewInt(denominator))
-	return value
+	result := new(big.Int).Set(value)
+	tmp := big.NewInt(numerator)
+	result.Mul(result, tmp)
+	tmp.SetInt64(denominator)
+	result.Div(result, tmp)
+	return result
 }
 
 // BigMulByUFrac multiply a huge by a rational whose components are non-negative
 func BigMulByUFrac(value *big.Int, numerator, denominator uint64) *big.Int {
-	value = new(big.Int).Set(value)
-	value.Mul(value, new(big.Int).SetUint64(numerator))
-	value.Div(value, new(big.Int).SetUint64(denominator))
-	return value
+	result := new(big.Int).Set(value)
+	tmp := new(big.Int).SetUint64(numerator)
+	result.Mul(result, tmp)
+	tmp.SetUint64(denominator)
+	result.Div(result, tmp)
+	return result
 }
 
 // BigMulByInt multiply a huge by an integer
