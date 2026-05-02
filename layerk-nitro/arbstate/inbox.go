@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -84,7 +83,7 @@ func ParseSequencerMessage(ctx context.Context, batchNum uint64, batchBlockHash 
 				if err != nil {
 					// Matches the way keyset validation was done inside DAS readers i.e logging the error
 					//  But other daproviders might just want to return the error
-					if strings.Contains(err.Error(), daprovider.ErrSeqMsgValidation.Error()) && daprovider.IsDASMessageHeaderByte(payload[0]) {
+					if errors.Is(err, daprovider.ErrSeqMsgValidation) && daprovider.IsDASMessageHeaderByte(payload[0]) {
 						if keysetValidationMode == daprovider.KeysetPanicIfInvalid {
 							panic(err.Error())
 						} else {
@@ -131,16 +130,16 @@ func ParseSequencerMessage(ctx context.Context, batchNum uint64, batchBlockHash 
 			reader := bytes.NewReader(decompressed)
 			stream := rlp.NewStream(reader, uint64(MaxDecompressedLen))
 			for {
+				if len(parsedMsg.Segments) >= MaxSegmentsPerSequencerMessage {
+					log.Warn("too many segments in sequence batch")
+					break
+				}
 				var segment []byte
 				err := stream.Decode(&segment)
 				if err != nil {
 					if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 						log.Warn("error parsing sequencer message segment", "err", err.Error())
 					}
-					break
-				}
-				if len(parsedMsg.Segments) >= MaxSegmentsPerSequencerMessage {
-					log.Warn("too many segments in sequence batch")
 					break
 				}
 				parsedMsg.Segments = append(parsedMsg.Segments, segment)
@@ -243,7 +242,7 @@ func (r *inboxMultiplexer) Pop(ctx context.Context) (*arbostypes.MessageWithMeta
 	}
 	msg, err := r.getNextMsg()
 	// advance even if there was an error
-	if r.IsCachedSegementLast() {
+	if r.IsCachedSegmentLast() {
 		r.advanceSequencerMsg()
 	} else {
 		r.advanceSubMsg()
@@ -275,7 +274,7 @@ func (r *inboxMultiplexer) advanceSubMsg() {
 	r.backend.SetPositionWithinMessage(r.backend.GetPositionWithinMessage() + 1)
 }
 
-func (r *inboxMultiplexer) IsCachedSegementLast() bool {
+func (r *inboxMultiplexer) IsCachedSegmentLast() bool {
 	seqMsg := r.cachedSequencerMessage
 	segments := seqMsg.Segments
 	segmentsLen := uint64(len(segments))
