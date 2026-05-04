@@ -167,7 +167,7 @@ contract ValidatorUtils {
         uint64 node1Prev = rollup.getNode(node1).prevNum;
         uint64 node2Prev = rollup.getNode(node2).prevNum;
 
-        for (uint256 i = 0; i < maxDepth; i++) {
+        for (uint256 i = 0; i < maxDepth;) {
             if (node1 == node2) {
                 return NodeConflict(NodeConflictType.NONE, node1, node2);
             }
@@ -184,6 +184,7 @@ contract ValidatorUtils {
                 node1 = node1Prev;
                 node1Prev = rollup.getNode(node1).prevNum;
             }
+            unchecked { ++i; }
         }
         return NodeConflict(NodeConflictType.INCOMPLETE, 0, 0);
     }

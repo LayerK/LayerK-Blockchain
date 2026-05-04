@@ -257,7 +257,7 @@ contract RollupAdminLogic is RollupCore, IRollupAdmin, DoubleLogicUUPSUpgradeabl
         require(len > 0, "EMPTY_ARRAY");
         require(len == stakerB.length, "WRONG_LENGTH");
         IChallengeManager challengeManager_ = challengeManager;
-        for (uint256 i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len;) {
             address a = stakerA[i];
             address b = stakerB[i];
             uint64 chall = inChallenge(a, b);
@@ -266,6 +266,7 @@ contract RollupAdminLogic is RollupCore, IRollupAdmin, DoubleLogicUUPSUpgradeabl
             clearChallenge(a);
             clearChallenge(b);
             challengeManager_.clearChallenge(chall);
+            unchecked { ++i; }
         }
         emit OwnerFunctionCalled(21);
     }
@@ -273,11 +274,12 @@ contract RollupAdminLogic is RollupCore, IRollupAdmin, DoubleLogicUUPSUpgradeabl
     function forceRefundStaker(address[] calldata staker) external override whenPaused {
         uint256 len = staker.length;
         require(len > 0, "EMPTY_ARRAY");
-        for (uint256 i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len;) {
             address s = staker[i];
             require(_stakerMap[s].currentChallenge == NO_CHAL_INDEX, "STAKER_IN_CHALL");
             reduceStakeTo(s, 0);
             turnIntoZombie(s);
+            unchecked { ++i; }
         }
         emit OwnerFunctionCalled(22);
     }
