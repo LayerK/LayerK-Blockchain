@@ -77,19 +77,23 @@ contract HashProofHelper {
             if (endIdx > data.length) {
                 endIdx = data.length;
             }
-            for (uint256 i = startIdx; i < endIdx; i++) {
-                state.part.push(data[i]);
+            unchecked {
+                for (uint256 i = startIdx; i < endIdx; ++i) {
+                    state.part.push(data[i]);
+                }
             }
         }
         if (!isFinal) {
             return bytes32(0);
         }
-        for (uint256 i = 0; i < 32; i++) {
-            uint256 stateIdx = i / 8;
-            // work around our weird keccakF function state ordering
-            stateIdx = 5 * (stateIdx % 5) + stateIdx / 5;
-            uint8 b = uint8(state.state[stateIdx] >> ((i % 8) * 8));
-            fullHash |= bytes32(uint256(b) << (248 - (i * 8)));
+        unchecked {
+            for (uint256 i = 0; i < 32; ++i) {
+                uint256 stateIdx = i / 8;
+                // work around our weird keccakF function state ordering
+                stateIdx = 5 * (stateIdx % 5) + stateIdx / 5;
+                uint8 b = uint8(state.state[stateIdx] >> ((i % 8) * 8));
+                fullHash |= bytes32(uint256(b) << (248 - (i * 8)));
+            }
         }
         preimageParts[fullHash][state.offset] = PreimagePart({proven: true, part: state.part});
         emit PreimagePartProven(fullHash, state.offset, state.part);
@@ -106,31 +110,37 @@ contract HashProofHelper {
             if (data.length == 0 && !isFinal) {
                 break;
             }
-            for (uint256 i = 0; i < KECCAK_ROUND_INPUT; i++) {
-                uint8 b = 0;
-                if (i < data.length) {
-                    b = uint8(data[i]);
-                } else {
-                    // Padding
-                    if (i == data.length) {
-                        b |= uint8(0x01);
+            unchecked {
+                for (uint256 i = 0; i < KECCAK_ROUND_INPUT; ++i) {
+                    uint8 b = 0;
+                    if (i < data.length) {
+                        b = uint8(data[i]);
+                    } else {
+                        // Padding
+                        if (i == data.length) {
+                            b |= uint8(0x01);
+                        }
+                        if (i == KECCAK_ROUND_INPUT - 1) {
+                            b |= uint8(0x80);
+                        }
                     }
-                    if (i == KECCAK_ROUND_INPUT - 1) {
-                        b |= uint8(0x80);
-                    }
+                    uint256 stateIdx = i / 8;
+                    // work around our weird keccakF function state ordering
+                    stateIdx = 5 * (stateIdx % 5) + stateIdx / 5;
+                    state.state[stateIdx] ^= uint64(b) << uint64((i % 8) * 8);
                 }
-                uint256 stateIdx = i / 8;
-                // work around our weird keccakF function state ordering
-                stateIdx = 5 * (stateIdx % 5) + stateIdx / 5;
-                state.state[stateIdx] ^= uint64(b) << uint64((i % 8) * 8);
             }
             uint256[25] memory state256;
-            for (uint256 i = 0; i < 25; i++) {
-                state256[i] = state.state[i];
+            unchecked {
+                for (uint256 i = 0; i < 25; ++i) {
+                    state256[i] = state.state[i];
+                }
             }
             state256 = CryptographyPrimitives.keccakF(state256);
-            for (uint256 i = 0; i < 25; i++) {
-                state.state[i] = uint64(state256[i]);
+            unchecked {
+                for (uint256 i = 0; i < 25; ++i) {
+                    state.state[i] = uint64(state256[i]);
+                }
             }
             if (data.length < KECCAK_ROUND_INPUT) {
                 break;
