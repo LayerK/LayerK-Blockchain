@@ -106,7 +106,7 @@ contract SequencerInbox is DelegateCallAware, GasRefundEnabled, ISequencerInbox 
     }
 
     modifier onlyRollupOwnerOrBatchPosterManager() {
-        if (msg.sender != rollup.owner() && msg.sender != batchPosterManager) {
+        if (msg.sender != batchPosterManager && msg.sender != rollup.owner()) {
             revert NotBatchPosterManager(msg.sender);
         }
         _;

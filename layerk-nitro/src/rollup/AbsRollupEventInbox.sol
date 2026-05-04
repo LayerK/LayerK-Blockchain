@@ -40,8 +40,9 @@ abstract contract AbsRollupEventInbox is
 
     /// @notice Allows the rollup owner to sync the rollup address
     function updateRollupAddress() external {
-        if (msg.sender != IOwnable(rollup).owner()) {
-            revert NotOwner(msg.sender, IOwnable(rollup).owner());
+        address owner = IOwnable(rollup).owner();
+        if (msg.sender != owner) {
+            revert NotOwner(msg.sender, owner);
         }
         address newRollup = address(bridge.rollup());
         if (rollup == newRollup) revert RollupNotChanged();
