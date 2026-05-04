@@ -159,6 +159,7 @@ contract ExpressLaneAuction is
     function setBeneficiary(
         address newBeneficiary
     ) external onlyRole(BENEFICIARY_SETTER_ROLE) {
+        if (newBeneficiary == address(0)) revert ZeroAddress();
         emit SetBeneficiary(beneficiary, newBeneficiary);
         beneficiary = newBeneficiary;
     }
