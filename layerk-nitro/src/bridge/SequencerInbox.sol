@@ -100,7 +100,8 @@ contract SequencerInbox is DelegateCallAware, GasRefundEnabled, ISequencerInbox 
     mapping(bytes32 => DasKeySetInfo) public dasKeySetInfo;
 
     modifier onlyRollupOwner() {
-        if (msg.sender != rollup.owner()) revert NotOwner(msg.sender, rollup.owner());
+        address owner = rollup.owner();
+        if (msg.sender != owner) revert NotOwner(msg.sender, owner);
         _;
     }
 
@@ -197,8 +198,9 @@ contract SequencerInbox is DelegateCallAware, GasRefundEnabled, ISequencerInbox 
 
     /// @notice Allows the rollup owner to sync the rollup address
     function updateRollupAddress() external {
-        if (msg.sender != IOwnable(rollup).owner()) {
-            revert NotOwner(msg.sender, IOwnable(rollup).owner());
+        address owner = IOwnable(rollup).owner();
+        if (msg.sender != owner) {
+            revert NotOwner(msg.sender, owner);
         }
         IOwnable newRollup = bridge.rollup();
         if (rollup == newRollup) revert RollupNotChanged();
