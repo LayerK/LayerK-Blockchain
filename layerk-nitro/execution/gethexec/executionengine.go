@@ -67,8 +67,8 @@ var ExecutionEngineBlockCreationStopped = errors.New("block creation stopped in 
 var ResultNotFound = errors.New("result not found")
 
 type L1PriceDataOfMsg struct {
-	callDataUnits            uint64
-	cummulativeCallDataUnits uint64
+	callDataUnits           uint64
+	cumulativeCallDataUnits uint64
 }
 
 type L1PriceData struct {
@@ -120,8 +120,8 @@ func (d *L1PriceData) reset(msgIdx arbutil.MessageIndex, callDataUnits uint64) {
 	d.startOfL1PriceDataCache = msgIdx
 	d.endOfL1PriceDataCache = msgIdx
 	d.msgToL1PriceData = append(d.msgToL1PriceData[:0], L1PriceDataOfMsg{
-		callDataUnits:            callDataUnits,
-		cummulativeCallDataUnits: callDataUnits,
+		callDataUnits:           callDataUnits,
+		cumulativeCallDataUnits: callDataUnits,
 	})
 }
 
@@ -143,8 +143,8 @@ func (s *ExecutionEngine) backlogCallDataUnits() uint64 {
 	if size == 0 {
 		return 0
 	}
-	return (s.cachedL1PriceData.msgToL1PriceData[size-1].cummulativeCallDataUnits -
-		s.cachedL1PriceData.msgToL1PriceData[0].cummulativeCallDataUnits +
+	return (s.cachedL1PriceData.msgToL1PriceData[size-1].cumulativeCallDataUnits -
+		s.cachedL1PriceData.msgToL1PriceData[0].cumulativeCallDataUnits +
 		s.cachedL1PriceData.msgToL1PriceData[0].callDataUnits)
 }
 
@@ -882,7 +882,7 @@ func (s *ExecutionEngine) cacheL1PriceDataOfMsg(msgIdx arbutil.MessageIndex, blo
 	var callDataUnits uint64
 	if !blockBuiltUsingDelayedMessage {
 		// s.cachedL1PriceData tracks L1 price data for messages posted by Nitro,
-		// so delayed messages should not update cummulative values kept on it.
+		// so delayed messages should not update cumulative values kept on it.
 
 		txs := block.Transactions()
 		for i := 0; i < len(txs); i++ {
@@ -908,7 +908,7 @@ func (s *ExecutionEngine) cacheL1PriceDataOfMsg(msgIdx arbutil.MessageIndex, blo
 	}
 	if msgIdx != cache.endOfL1PriceDataCache+1 {
 		if msgIdx > cache.endOfL1PriceDataCache+1 {
-			log.Info("message position higher then current end of l1 price data cache, resetting cache to this message")
+			log.Info("message position higher than current end of l1 price data cache, resetting cache to this message")
 			resetCache()
 		} else if msgIdx < cache.startOfL1PriceDataCache {
 			log.Info("message position lower than start of l1 price data cache, ignoring")
@@ -916,10 +916,10 @@ func (s *ExecutionEngine) cacheL1PriceDataOfMsg(msgIdx arbutil.MessageIndex, blo
 			log.Info("message position already seen in l1 price data cache, ignoring")
 		}
 	} else {
-		cummulativeCallDataUnits := cache.msgToL1PriceData[size-1].cummulativeCallDataUnits
+		cumulativeCallDataUnits := cache.msgToL1PriceData[size-1].cumulativeCallDataUnits
 		cache.msgToL1PriceData = append(cache.msgToL1PriceData, L1PriceDataOfMsg{
-			callDataUnits:            callDataUnits,
-			cummulativeCallDataUnits: cummulativeCallDataUnits + callDataUnits,
+			callDataUnits:           callDataUnits,
+			cumulativeCallDataUnits: cumulativeCallDataUnits + callDataUnits,
 		})
 		cache.endOfL1PriceDataCache = msgIdx
 	}
