@@ -109,13 +109,13 @@ func (c *ValidationClient) Initialize(ctx context.Context, moduleRoots []common.
 			}
 		}
 		if _, exists := c.producers[mr]; exists {
-			log.Warn("Producer already existsw for module root", "hash", mr)
+			log.Warn("Producer already exists for module root", "hash", mr)
 			continue
 		}
 		p, err := pubsub.NewProducer[*validator.ValidationInput, validator.GoGlobalState](
 			c.redisClient, server_api.RedisStreamForRoot(c.config.StreamPrefix, mr), &c.config.ProducerConfig)
 		if err != nil {
-			log.Warn("failed init redis for %v: %w", mr, err)
+			log.Warn("failed to init redis producer for module root", "hash", mr, "err", err)
 			continue
 		}
 		p.Start(c.GetContext())

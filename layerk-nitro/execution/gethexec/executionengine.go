@@ -865,15 +865,15 @@ func (s *ExecutionEngine) getL1PricingSurplus() (int64, error) {
 	latestHeader := bc.CurrentBlock()
 	latestState, err := bc.StateAt(latestHeader.Root)
 	if err != nil {
-		return 0, errors.New("error getting latest statedb while fetching current L1 pricing surplus")
+		return 0, fmt.Errorf("error getting latest statedb while fetching current L1 pricing surplus: %w", err)
 	}
 	arbState, err := arbosState.OpenSystemArbosState(latestState, nil, true)
 	if err != nil {
-		return 0, errors.New("error opening system arbos state while fetching current L1 pricing surplus")
+		return 0, fmt.Errorf("error opening system arbos state while fetching current L1 pricing surplus: %w", err)
 	}
 	surplus, err := arbState.L1PricingState().GetL1PricingSurplus()
 	if err != nil {
-		return 0, errors.New("error fetching current L1 pricing surplus")
+		return 0, fmt.Errorf("error fetching current L1 pricing surplus: %w", err)
 	}
 	return surplus.Int64(), nil
 }
