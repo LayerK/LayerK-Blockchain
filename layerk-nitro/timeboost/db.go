@@ -92,6 +92,11 @@ func executeSchema(db *sqlx.DB, schema string, version int) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
 	// Execute the schema
 	_, err = tx.Exec(schema)
