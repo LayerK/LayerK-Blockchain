@@ -382,8 +382,8 @@ type synchronizedTxQueue struct {
 
 func (q *synchronizedTxQueue) Push(item txQueueItem) {
 	q.mutex.Lock()
+	defer q.mutex.Unlock()
 	q.queue.Push(item)
-	q.mutex.Unlock()
 }
 
 func (q *synchronizedTxQueue) Pop() txQueueItem {
