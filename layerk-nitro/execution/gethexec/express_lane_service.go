@@ -73,24 +73,27 @@ func NewExpressLaneAuctionFromInternalAPI(
 }
 
 func GetRoundTimingInfo(
+	ctx context.Context,
 	auctionContract *express_lane_auctiongen.ExpressLaneAuction,
 ) (*timeboost.RoundTimingInfo, error) {
-	retries := 0
-
-pending:
-	rawRoundTimingInfo, err := auctionContract.RoundTimingInfo(&bind.CallOpts{})
-	if err != nil {
-		const maxRetries = 5
+	const maxRetries = 5
+	for retries := 0; ; retries++ {
+		rawRoundTimingInfo, err := auctionContract.RoundTimingInfo(&bind.CallOpts{Context: ctx})
+		if err == nil {
+			return timeboost.NewRoundTimingInfo(rawRoundTimingInfo)
+		}
 		if errors.Is(err, bind.ErrNoCode) && retries < maxRetries {
 			wait := time.Millisecond * 250 * (1 << retries)
 			log.Info("ExpressLaneAuction contract not ready, will retry after wait", "err", err, "wait", wait, "maxRetries", maxRetries)
-			retries++
-			time.Sleep(wait)
-			goto pending
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(wait):
+			}
+			continue
 		}
 		return nil, err
 	}
-	return timeboost.NewRoundTimingInfo(rawRoundTimingInfo)
 }
 
 func newExpressLaneService(

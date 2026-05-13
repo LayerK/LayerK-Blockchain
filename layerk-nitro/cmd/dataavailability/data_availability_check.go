@@ -41,7 +41,7 @@ import (
 // 2. Call the function in an adhoc manner to check if the provided DAS is live and functioning properly.
 
 const metricBaseOldHash = "arb/das/dataavailability/oldhash/"
-const metricBaseNewHash = "arb/das/dataavailability/oldhash/"
+const metricBaseNewHash = "arb/das/dataavailability/newhash/"
 
 type DataAvailabilityCheckConfig struct {
 	OnlineUrlList         string        `koanf:"online-url-list"`

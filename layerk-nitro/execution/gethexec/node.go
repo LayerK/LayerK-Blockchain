@@ -576,7 +576,7 @@ func (n *ExecutionNode) InitializeTimeboost(ctx context.Context, chainConfig *pa
 			return err
 		}
 
-		roundTimingInfo, err := GetRoundTimingInfo(auctionContract)
+		roundTimingInfo, err := GetRoundTimingInfo(ctx, auctionContract)
 		if err != nil {
 			return err
 		}
