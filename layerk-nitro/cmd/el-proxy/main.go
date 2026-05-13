@@ -170,7 +170,7 @@ var ErrorInternalConnectionError = errors.New("internal connection error")
 func GetClientFromURL(ctx context.Context, rawUrl string, transport *http.Transport) (*rpc.Client, error) {
 	u, err := url.Parse(rawUrl)
 	if err != nil {
-		log.Error("error getting client from url", "error", err)
+		log.Error("error getting client from url", "err", err)
 		return nil, ErrorInternalConnectionError
 	}
 
@@ -192,7 +192,7 @@ func GetClientFromURL(ctx context.Context, rawUrl string, transport *http.Transp
 		return nil, ErrorInternalConnectionError
 	}
 	if err != nil {
-		log.Error("error connecting to client", "error", err, "url", rawUrl)
+		log.Error("error connecting to client", "err", err, "url", rawUrl)
 		return nil, ErrorInternalConnectionError
 	}
 	return rpcClient, nil
@@ -369,7 +369,7 @@ func mainImpl() int {
 	})
 
 	if err := startMetrics(expressLaneProxyConfig); err != nil {
-		log.Error("Error starting metrics", "error", err)
+		log.Error("Error starting metrics", "err", err)
 		return 1
 	}
 
@@ -383,13 +383,13 @@ func mainImpl() int {
 	}
 	proxy, err := NewExpressLaneProxy(ctx, expressLaneProxyConfig, stack)
 	if err != nil {
-		log.Error("error", "err", err)
+		log.Error("failed to create express lane proxy", "err", err)
 		return 1
 	}
 
 	err = stack.Start()
 	if err != nil {
-		log.Error("error", "err", err)
+		log.Error("failed to start geth stack", "err", err)
 		return 1
 	}
 	defer stack.Close()

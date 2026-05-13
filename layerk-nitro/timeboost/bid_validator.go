@@ -245,7 +245,7 @@ func (bv *BidValidator) Start(ctx_in context.Context) {
 			case <-reservePriceTicker.c:
 				rp, err := bv.auctionContract.ReservePrice(&bind.CallOpts{})
 				if err != nil {
-					log.Error("Could not get reserve price", "error", err)
+					log.Error("Could not get reserve price", "err", err)
 					continue
 				}
 

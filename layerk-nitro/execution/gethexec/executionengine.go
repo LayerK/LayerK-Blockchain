@@ -513,10 +513,10 @@ func (s *ExecutionEngine) SequenceTransactions(header *arbostypes.L1IncomingMess
 func (s *ExecutionEngine) SequenceTransactionsWithProfiling(header *arbostypes.L1IncomingMessageHeader, txes types.Transactions, hooks *arbos.SequencingHooks, timeboostedTxs map[common.Hash]struct{}) (*types.Block, error) {
 	pprofBuf, traceBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
 	if err := pprof.StartCPUProfile(pprofBuf); err != nil {
-		log.Error("Starting CPU profiling", "error", err)
+		log.Error("Starting CPU profiling", "err", err)
 	}
 	if err := trace.Start(traceBuf); err != nil {
-		log.Error("Starting tracing", "error", err)
+		log.Error("Starting tracing", "err", err)
 	}
 	start := time.Now()
 	res, err := s.SequenceTransactions(header, txes, hooks, timeboostedTxs)
@@ -534,12 +534,12 @@ func writeAndLog(pprof, trace *bytes.Buffer) {
 	id := uuid.NewString()
 	pprofFile := path.Join(os.TempDir(), id+".pprof")
 	if err := os.WriteFile(pprofFile, pprof.Bytes(), 0o600); err != nil {
-		log.Error("Creating temporary file for pprof", "fileName", pprofFile, "error", err)
+		log.Error("Creating temporary file for pprof", "fileName", pprofFile, "err", err)
 		return
 	}
 	traceFile := path.Join(os.TempDir(), id+".trace")
 	if err := os.WriteFile(traceFile, trace.Bytes(), 0o600); err != nil {
-		log.Error("Creating temporary file for trace", "fileName", traceFile, "error", err)
+		log.Error("Creating temporary file for trace", "fileName", traceFile, "err", err)
 		return
 	}
 	log.Info("Transactions sequencing took longer than 2 seconds, created pprof and trace files", "pprof", pprofFile, "traceFile", traceFile)

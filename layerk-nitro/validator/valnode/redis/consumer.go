@@ -91,7 +91,7 @@ func (s *ValidationServer) Start(ctx_in context.Context) {
 				}
 				select {
 				case <-ctx.Done():
-					log.Info("Context done while checking redis stream existence", "error", ctx.Err().Error())
+					log.Info("Context done while checking redis stream existence", "err", ctx.Err())
 					return
 				case <-time.After(time.Millisecond * 100):
 				}
@@ -100,7 +100,7 @@ func (s *ValidationServer) Start(ctx_in context.Context) {
 		s.StopWaiter.LaunchThread(func(ctx context.Context) {
 			select {
 			case <-ctx.Done():
-				log.Info("Context done while waiting a redis stream to be ready", "error", ctx.Err().Error())
+				log.Info("Context done while waiting a redis stream to be ready", "err", ctx.Err())
 				return
 			case <-ready: // Wait until the stream exists and start consuming iteratively.
 			}
@@ -114,7 +114,7 @@ func (s *ValidationServer) Start(ctx_in context.Context) {
 				log.Debug("got request token", "cid", c.Id())
 				req, err := c.Consume(ctx)
 				if err != nil {
-					log.Error("Consuming request", "error", err)
+					log.Error("Failed to consume request", "err", err)
 					requestTokenQueue <- struct{}{}
 					return 0
 				}
@@ -162,11 +162,11 @@ func (s *ValidationServer) Start(ctx_in context.Context) {
 				valRun := s.spawner.Launch(work.req.Value, work.moduleRoot)
 				res, err := valRun.Await(ctx)
 				if err != nil {
-					log.Error("Error validating", "request value", work.req.Value, "error", err)
+					log.Error("Error validating", "request value", work.req.Value, "err", err)
 					err := s.consumers[work.moduleRoot].SetError(ctx, work.req.ID, err.Error())
 					work.req.Ack()
 					if err != nil {
-						log.Error("Error setting error for request", "id", work.req.ID, "error", err)
+						log.Error("Error setting error for request", "id", work.req.ID, "err", err)
 					}
 				} else {
 					log.Debug("done work", "thread", i, "workid", work.req.ID)
@@ -174,7 +174,7 @@ func (s *ValidationServer) Start(ctx_in context.Context) {
 					// Even in error we close ackNotifier as there's no retry mechanism here and closing it will alow other consumers to autoclaim
 					work.req.Ack()
 					if err != nil {
-						log.Error("Error setting result for request", "id", work.req.ID, "result", res, "error", err)
+						log.Error("Error setting result for request", "id", work.req.ID, "result", res, "err", err)
 					}
 					log.Debug("set result", "thread", i, "workid", work.req.ID)
 				}

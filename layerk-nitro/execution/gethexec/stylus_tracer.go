@@ -184,7 +184,7 @@ func (t *stylusTracer) GetResult() (json.RawMessage, error) {
 		internalErr = errors.Join(internalErr, fmt.Errorf("tracer.stack should be empty, but has %d values", t.stack.Len()))
 	}
 	if internalErr != nil {
-		log.Error("stylusTracer: internal error when generating a trace", "error", internalErr)
+		log.Error("stylusTracer: internal error when generating a trace", "err", internalErr)
 		return nil, fmt.Errorf("internal error: %w", internalErr)
 	}
 

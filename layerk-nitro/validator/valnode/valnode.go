@@ -126,7 +126,7 @@ func CreateValidationNode(configFetcher ValidationConfigFetcher, stack *node.Nod
 	if redisValidationConfig.Enabled() {
 		redisConsumer, err = redis.NewValidationServer(&redisValidationConfig, arbSpawner)
 		if err != nil {
-			log.Error("Creating new redis validation server", "error", err)
+			log.Error("Creating new redis validation server", "err", err)
 		}
 	}
 	valAPIs := []rpc.API{{

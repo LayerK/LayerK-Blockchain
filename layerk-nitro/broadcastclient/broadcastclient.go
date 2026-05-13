@@ -470,7 +470,7 @@ func (bc *BroadcastClient) startBackgroundReader(earlyFrameData io.Reader) {
 
 							err := bc.isValidSignature(ctx, message)
 							if err != nil {
-								log.Error("error validating feed signature", "error", err, "sequence number", message.SequenceNumber)
+								log.Error("error validating feed signature", "err", err, "sequence number", message.SequenceNumber)
 								bc.fatalErrChan <- fmt.Errorf("error validating feed signature %v: %w", message.SequenceNumber, err)
 								continue
 							}

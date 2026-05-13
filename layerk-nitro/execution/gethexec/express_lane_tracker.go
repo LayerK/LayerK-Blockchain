@@ -113,7 +113,7 @@ func (t *ExpressLaneTracker) Start(ctxIn context.Context) {
 
 			it, err := t.auctionContract.FilterAuctionResolved(filterOpts, nil, nil, nil)
 			if err != nil {
-				log.Error("Could not filter auction resolutions event", "error", err)
+				log.Error("Could not filter auction resolutions event", "err", err)
 				continue
 			}
 			for it.Next() {

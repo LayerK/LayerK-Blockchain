@@ -269,7 +269,7 @@ func (a *AuctioneerServer) consumeNextBid(ctx context.Context) time.Duration {
 
 	req, err := a.consumer.Consume(ctx)
 	if err != nil {
-		log.Error("Consuming request", "error", err)
+		log.Error("Failed to consume bid request", "err", err)
 		return 0
 	}
 	if req == nil {
@@ -352,7 +352,7 @@ func (a *AuctioneerServer) updateCoordination(ctx context.Context) time.Duration
 					log.Error("Error deleting stale lock key",
 						"id", a.myId,
 						"key", AUCTIONEER_CHOSEN_KEY,
-						"error", delErr,
+						"err", delErr,
 						"storedId", storedId,
 						"storedTimestamp", storedTimestamp,
 						"elapsedMs", elapsed)
@@ -421,7 +421,7 @@ func (a *AuctioneerServer) Start(ctx_in context.Context) {
 			}
 			select {
 			case <-ctx.Done():
-				log.Info("Context done while checking redis stream existence", "error", ctx.Err().Error())
+				log.Info("Context done while checking redis stream existence", "err", ctx.Err())
 				return
 			case <-time.After(time.Millisecond * 100):
 			}
@@ -430,7 +430,7 @@ func (a *AuctioneerServer) Start(ctx_in context.Context) {
 	a.StopWaiter.LaunchThread(func(ctx context.Context) {
 		select {
 		case <-ctx.Done():
-			log.Info("Context done while waiting a redis stream to be ready", "error", ctx.Err().Error())
+			log.Info("Context done while waiting a redis stream to be ready", "err", ctx.Err())
 			return
 		case <-ready: // Wait until the stream exists and start consuming iteratively.
 		}
@@ -481,7 +481,7 @@ func (a *AuctioneerServer) Start(ctx_in context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Error("Context closed, autonomous auctioneer shutting down")
+				log.Info("Context closed, autonomous auctioneer shutting down")
 				return
 			case auctionClosingTime, ok := <-ticker.c:
 				if !ok {
@@ -494,7 +494,7 @@ func (a *AuctioneerServer) Start(ctx_in context.Context) {
 					return
 				}
 				if err := a.resolveAuction(ctx); err != nil {
-					log.Error("Could not resolve auction for round", "error", err)
+					log.Error("Could not resolve auction for round", "err", err)
 				}
 				// Clear the bid cache after resolving the current round.
 				a.bidCache = newBidCache(a.auctionContractDomainSeparator)
@@ -581,7 +581,7 @@ func (a *AuctioneerServer) resolveAuction(ctx context.Context) error {
 	var receipt *types.Receipt
 	tx, err = makeAuctionResolutionTx(false)
 	if err != nil {
-		log.Error("Error resolving auction", "error", err)
+		log.Error("Error resolving auction", "err", err)
 		return err
 	}
 
@@ -594,7 +594,7 @@ func (a *AuctioneerServer) resolveAuction(ctx context.Context) error {
 	for retryCount := 0; retryCount < retryLimit; retryCount++ {
 		if err = retryUntil(ctx, func() error {
 			if err := sequencerRpc.CallContext(ctx, nil, "auctioneer_submitAuctionResolutionTransaction", tx); err != nil {
-				log.Error("Error submitting auction resolution to sequencer endpoint", "error", err)
+				log.Error("Error submitting auction resolution to sequencer endpoint", "err", err)
 				return err
 			}
 			return nil
@@ -622,7 +622,7 @@ func (a *AuctioneerServer) resolveAuction(ctx context.Context) error {
 		}
 		tx, err = makeAuctionResolutionTx(true)
 		if err != nil {
-			log.Error("Error resolving auction", "error", err)
+			log.Error("Error resolving auction", "err", err)
 			return err
 		}
 	}
@@ -644,7 +644,7 @@ func (a *AuctioneerServer) acknowledgeAllBids(ctx context.Context, round uint64)
 			// SetResult calls XAck to remove the msg from the consumer group's
 			// pending list and then removes it from the stream with XDel.
 			if err := a.consumer.SetResult(ctx, msgID, nil); err != nil {
-				log.Warn("Error marking bid message as consumed by auctioneer", "msgID", msgID, "error", err)
+				log.Warn("Error marking bid message as consumed by auctioneer", "msgID", msgID, "err", err)
 				// We still need delete that bid from unacked bids since
 				// it can't be Ack()ed more than once.
 				// It will be cleaned up when it's re-read or by the producer

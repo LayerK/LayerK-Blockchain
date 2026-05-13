@@ -58,7 +58,7 @@ func NewMachineLocator(rootPath string) (*MachineLocator, error) {
 	for _, dir := range dirs {
 		fInfo, err := os.Stat(dir)
 		if err != nil {
-			log.Warn("Getting file info", "dir", dir, "error", err)
+			log.Warn("Getting file info", "dir", dir, "err", err)
 			continue
 		}
 		if !fInfo.IsDir() {
@@ -67,7 +67,7 @@ func NewMachineLocator(rootPath string) (*MachineLocator, error) {
 		}
 		files, err := os.ReadDir(dir)
 		if err != nil {
-			log.Warn("Reading directory", "dir", dir, "error", err)
+			log.Warn("Reading directory", "dir", dir, "err", err)
 		}
 		for _, file := range files {
 			mrFile := filepath.Join(dir, file.Name(), "module-root.txt")
@@ -77,7 +77,7 @@ func NewMachineLocator(rootPath string) (*MachineLocator, error) {
 			}
 			mrContent, err := os.ReadFile(mrFile)
 			if err != nil {
-				log.Warn("Reading module roots file", "file path", mrFile, "error", err)
+				log.Warn("Reading module roots file", "file path", mrFile, "err", err)
 				continue
 			}
 			moduleRoot := common.HexToHash(strings.TrimSpace(string(mrContent)))

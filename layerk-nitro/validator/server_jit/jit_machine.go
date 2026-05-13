@@ -65,7 +65,7 @@ func createJitMachine(jitBinary string, binaryPath string, cranelift bool, wasmM
 func (machine *JitMachine) close() {
 	_, err := machine.stdin.Write([]byte("\n"))
 	if err != nil {
-		log.Error("error closing jit machine", "error", err)
+		log.Error("error closing jit machine", "err", err)
 	}
 }
 
