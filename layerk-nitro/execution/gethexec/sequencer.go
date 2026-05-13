@@ -613,7 +613,7 @@ func (s *Sequencer) PublishExpressLaneTransaction(ctx context.Context, msg *time
 	if s.expressLaneService == nil {
 		return errors.New("express lane service not enabled")
 	}
-	if err := s.expressLaneService.ValidateExpressLaneTx(msg); err != nil {
+	if err := s.expressLaneService.ValidateExpressLaneTx(ctx, msg); err != nil {
 		return err
 	}
 

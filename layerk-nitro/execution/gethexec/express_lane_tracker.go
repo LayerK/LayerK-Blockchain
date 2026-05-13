@@ -178,7 +178,7 @@ func (t *ExpressLaneTracker) RoundController(round uint64) (common.Address, erro
 }
 
 // validateExpressLaneTx checks for the correctness of all fields of msg
-func (t *ExpressLaneTracker) ValidateExpressLaneTx(msg *timeboost.ExpressLaneSubmission) error {
+func (t *ExpressLaneTracker) ValidateExpressLaneTx(ctx context.Context, msg *timeboost.ExpressLaneSubmission) error {
 	if msg == nil || msg.Transaction == nil || msg.Signature == nil {
 		return timeboost.ErrMalformedData
 	}
@@ -195,7 +195,11 @@ func (t *ExpressLaneTracker) ValidateExpressLaneTx(msg *timeboost.ExpressLaneSub
 		// We allow txs to come in for the next round if it is close enough to that round,
 		// but we sleep until the round starts.
 		if msg.Round == currentRound+1 && timeTilNextRound <= t.earlySubmissionGrace {
-			time.Sleep(timeTilNextRound)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(timeTilNextRound):
+			}
 		} else {
 			return errors.Wrapf(timeboost.ErrBadRoundNumber, "express lane tx round %d does not match current round %d", msg.Round, currentRound)
 		}

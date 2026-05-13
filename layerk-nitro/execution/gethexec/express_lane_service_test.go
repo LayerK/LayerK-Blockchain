@@ -213,7 +213,7 @@ func Test_expressLaneService_validateExpressLaneTx(t *testing.T) {
 			if tt.sub != nil && !errors.Is(tt.expectedErr, timeboost.ErrNoOnchainController) {
 				tt.t.roundControl.Store(tt.sub.Round, tt.controller)
 			}
-			err := tt.t.ValidateExpressLaneTx(tt.sub)
+			err := tt.t.ValidateExpressLaneTx(context.Background(), tt.sub)
 			if tt.valid {
 				require.NoError(t, err)
 				return
@@ -241,22 +241,22 @@ func Test_expressLaneService_validateExpressLaneTx_gracePeriod(t *testing.T) {
 	tr.roundControl.Store(1, crypto.PubkeyToAddress(testPriv2.PublicKey))
 
 	sub1 := buildValidSubmission(t, auctionContractAddr, testPriv, 0)
-	err := tr.ValidateExpressLaneTx(sub1)
+	err := tr.ValidateExpressLaneTx(context.Background(), sub1)
 	require.NoError(t, err)
 
 	// Send req for next round
 	sub2 := buildValidSubmission(t, auctionContractAddr, testPriv2, 1)
-	err = tr.ValidateExpressLaneTx(sub2)
+	err = tr.ValidateExpressLaneTx(context.Background(), sub2)
 	require.ErrorIs(t, err, timeboost.ErrBadRoundNumber)
 
 	// Sleep til 2 seconds before grace
 	time.Sleep(time.Second * 6)
-	err = tr.ValidateExpressLaneTx(sub2)
+	err = tr.ValidateExpressLaneTx(context.Background(), sub2)
 	require.ErrorIs(t, err, timeboost.ErrBadRoundNumber)
 
 	// Send req for next round within grace period
 	time.Sleep(time.Second * 2)
-	err = tr.ValidateExpressLaneTx(sub2)
+	err = tr.ValidateExpressLaneTx(context.Background(), sub2)
 	require.NoError(t, err)
 }
 
@@ -961,7 +961,7 @@ func Benchmark_expressLaneService_validateExpressLaneTx(b *testing.B) {
 	sub := buildValidSubmission(b, common.HexToAddress("0x2Aef36410182881a4b13664a1E079762D7F716e6"), testPriv, 0)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		err := tr.ValidateExpressLaneTx(sub)
+		err := tr.ValidateExpressLaneTx(context.Background(), sub)
 		require.NoError(b, err)
 	}
 }

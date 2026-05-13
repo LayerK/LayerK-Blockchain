@@ -245,7 +245,7 @@ func (c *TxPreChecker) PublishExpressLaneTransaction(ctx context.Context, msg *t
 		log.Error("ExpressLaneTracker not properly initialized in TxPreChecker, rejecting transaction.", "msg", msg)
 		return errors.New("express lane server misconfiguration")
 	}
-	err := c.expressLaneTracker.ValidateExpressLaneTx(msg)
+	err := c.expressLaneTracker.ValidateExpressLaneTx(ctx, msg)
 	if err != nil {
 		return err
 	}

@@ -53,7 +53,7 @@ func OpenWallet(description string, walletConfig *genericconf.WalletConfig, chai
 		return nil, nil, err
 	}
 	if walletConfig.OnlyCreateKey {
-		log.Info(fmt.Sprintf("Wallet key created with address %s, backup wallet (%s) and remove --%s.wallet.only-create-key to run normally", account.Address.Hex(), walletConfig.Pathname, description))
+		log.Info("Wallet key created", "address", account.Address.Hex(), "wallet", walletConfig.Pathname, "flag", "--"+description+".wallet.only-create-key")
 		return nil, nil, nil
 	}
 

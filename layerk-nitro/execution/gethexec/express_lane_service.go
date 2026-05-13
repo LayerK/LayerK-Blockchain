@@ -311,6 +311,6 @@ func (es *expressLaneService) AuctionContractAddr() common.Address {
 	return es.tracker.AuctionContractAddr()
 }
 
-func (es *expressLaneService) ValidateExpressLaneTx(msg *timeboost.ExpressLaneSubmission) error {
-	return es.tracker.ValidateExpressLaneTx(msg)
+func (es *expressLaneService) ValidateExpressLaneTx(ctx context.Context, msg *timeboost.ExpressLaneSubmission) error {
+	return es.tracker.ValidateExpressLaneTx(ctx, msg)
 }

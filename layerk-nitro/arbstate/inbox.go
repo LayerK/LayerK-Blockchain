@@ -87,7 +87,7 @@ func ParseSequencerMessage(ctx context.Context, batchNum uint64, batchBlockHash 
 						if keysetValidationMode == daprovider.KeysetPanicIfInvalid {
 							panic(err.Error())
 						} else {
-							log.Error(err.Error())
+							log.Error("keyset validation error in sequencer message", "err", err)
 						}
 					} else {
 						return nil, err
@@ -117,7 +117,7 @@ func ParseSequencerMessage(ctx context.Context, batchNum uint64, batchBlockHash 
 	if len(payload) > 0 && daprovider.IsZeroheavyEncodedHeaderByte(payload[0]) {
 		pl, err := io.ReadAll(io.LimitReader(zeroheavy.NewZeroheavyDecoder(bytes.NewReader(payload[1:])), int64(maxZeroheavyDecompressedLen)))
 		if err != nil {
-			log.Warn("error reading from zeroheavy decoder", err.Error())
+			log.Warn("error reading from zeroheavy decoder", "err", err)
 			return parsedMsg, nil
 		}
 		payload = pl
@@ -138,7 +138,7 @@ func ParseSequencerMessage(ctx context.Context, batchNum uint64, batchBlockHash 
 				err := stream.Decode(&segment)
 				if err != nil {
 					if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-						log.Warn("error parsing sequencer message segment", "err", err.Error())
+						log.Warn("error parsing sequencer message segment", "err", err)
 					}
 					break
 				}
