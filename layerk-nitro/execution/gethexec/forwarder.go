@@ -445,7 +445,6 @@ func (f *RedisTxForwarder) update(ctx context.Context) time.Duration {
 			log.Warn("redis coordinator not initialized, falling back to static url", "fallback", f.fallbackTarget)
 			newSequencerUrl = f.fallbackTarget
 		} else {
-			// TODO panic? - there is no way to recover from this point
 			log.Error("redis coordinator not initialized, no fallback available")
 			return f.retryAfterError()
 		}

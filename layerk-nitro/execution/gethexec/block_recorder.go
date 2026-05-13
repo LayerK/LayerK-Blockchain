@@ -264,7 +264,6 @@ func (r *BlockRecorder) MarkValid(pos arbutil.MessageIndex, resultHash common.Ha
 	r.validHdrCandidate = nil
 }
 
-// TODO: use config
 func (r *BlockRecorder) preparedAddTrim(newRefs []*types.Header, size int) {
 	var oldRefs []*types.Header
 	r.preparedLock.Lock()

@@ -150,7 +150,7 @@ func main() {
 func (d *DataAvailabilityCheck) start(ctx context.Context) time.Duration {
 	latestHeader, err := d.l1Client.HeaderByNumber(ctx, big.NewInt(rpc.FinalizedBlockNumber.Int64()))
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("failed to get latest finalized header", "err", err)
 		return d.checkInterval
 	}
 	latestBlockNumber := latestHeader.Number.Uint64()
@@ -165,7 +165,7 @@ func (d *DataAvailabilityCheck) start(ctx context.Context) time.Duration {
 	log.Info("Completed old hash data availability check")
 
 	if newHashErr != nil || oldHashErr != nil {
-		log.Error(fmt.Sprintf("new hash check: %s, old hash check: %s", newHashErr, oldHashErr))
+		log.Error("data availability check failed", "newHashErr", newHashErr, "oldHashErr", oldHashErr)
 	}
 	return d.checkInterval
 }
@@ -249,7 +249,7 @@ func (d *DataAvailabilityCheck) checkDataAvailability(ctx context.Context, deliv
 		if err != nil {
 			metrics.GetOrRegisterCounter(metricBase+"/"+canonicalUrl+"/failure", nil).Inc(1)
 			dataNotFound = append(dataNotFound, url)
-			log.Error(fmt.Sprintf("Data with hash: %s not found for: %s\n", common.Hash(cert.DataHash).String(), url))
+			log.Error("data with hash not found", "hash", common.Hash(cert.DataHash), "url", url)
 		} else {
 			metrics.GetOrRegisterCounter(metricBase+"/"+canonicalUrl+"/success", nil).Inc(1)
 		}
