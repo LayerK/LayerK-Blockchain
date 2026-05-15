@@ -121,7 +121,11 @@ func beaconRequest[T interface{}](b *BlobClient, ctx context.Context, beaconPath
 			return nil, err
 		}
 		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
+			defer resp.Body.Close()
+			body, err := io.ReadAll(io.LimitReader(resp.Body, maxBeaconErrorBodyBytes))
+			if err != nil {
+				return nil, fmt.Errorf("response returned with status %s, want 200 OK; failed to read response body: %w", resp.Status, err)
+			}
 			bodyStr := string(body)
 			log.Debug("beacon request returned response with non 200 OK status", "status", resp.Status, "body", bodyStr)
 			if len(bodyStr) > 100 {
@@ -195,6 +199,7 @@ type blobResponseItem struct {
 }
 
 const trailingCharsOfResponse = 25
+const maxBeaconErrorBodyBytes = 4 * 1024
 
 func (b *BlobClient) blobSidecars(ctx context.Context, slot uint64, versionedHashes []common.Hash) ([]kzg4844.Blob, error) {
 	rawData, err := beaconRequest[json.RawMessage](b, ctx, fmt.Sprintf("/eth/v1/beacon/blob_sidecars/%d", slot))

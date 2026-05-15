@@ -4,11 +4,14 @@
 package headerreader
 
 import (
+	"context"
 	"encoding/json"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/r3labs/diff/v3"
@@ -72,6 +75,76 @@ func TestNewBlobClientUsesSecondaryBeaconURL(t *testing.T) {
 	if got, want := client.secondaryBeaconUrl.String(), "https://secondary.example/beacon"; got != want {
 		Fail(t, "secondary beacon URL mismatch", "got", got, "want", want)
 	}
+}
+
+func TestBeaconRequestCapsAndClosesPrimaryErrorBodyBeforeSecondaryFallback(t *testing.T) {
+	client, err := NewBlobClient(BlobClientConfig{
+		BeaconUrl:          "https://primary.example",
+		SecondaryBeaconUrl: "https://secondary.example",
+	}, nil)
+	Require(t, err)
+
+	primaryBody := &closeTrackingBody{reader: strings.NewReader(strings.Repeat("x", maxBeaconErrorBodyBytes*2))}
+	client.httpClient.Store(&http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			switch req.URL.Host {
+			case "primary.example":
+				return &http.Response{
+					StatusCode: http.StatusInternalServerError,
+					Status:     "500 Internal Server Error",
+					Body:       primaryBody,
+					Header:     make(http.Header),
+					Request:    req,
+				}, nil
+			case "secondary.example":
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Body:       io.NopCloser(strings.NewReader(`{"data":{"ok":true}}`)),
+					Header:     make(http.Header),
+					Request:    req,
+				}, nil
+			default:
+				Fail(t, "unexpected request host", req.URL.Host)
+				return nil, nil
+			}
+		}),
+	})
+
+	data, err := beaconRequest[json.RawMessage](client, context.Background(), "/eth/v1/config/spec")
+	Require(t, err)
+	if got, want := string(data), `{"ok":true}`; got != want {
+		Fail(t, "unexpected response data", "got", got, "want", want)
+	}
+	if !primaryBody.closed {
+		Fail(t, "primary error response body was not closed before fallback")
+	}
+	if primaryBody.readBytes != maxBeaconErrorBodyBytes {
+		Fail(t, "primary error response body read was not capped", "got", primaryBody.readBytes, "want", maxBeaconErrorBodyBytes)
+	}
+}
+
+type closeTrackingBody struct {
+	reader    *strings.Reader
+	closed    bool
+	readBytes int
+}
+
+func (b *closeTrackingBody) Read(p []byte) (int, error) {
+	n, err := b.reader.Read(p)
+	b.readBytes += n
+	return n, err
+}
+
+func (b *closeTrackingBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 func Require(t *testing.T, err error, printables ...interface{}) {
