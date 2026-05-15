@@ -59,6 +59,21 @@ func TestSaveBlobsToDisk(t *testing.T) {
 	}
 }
 
+func TestNewBlobClientUsesSecondaryBeaconURL(t *testing.T) {
+	client, err := NewBlobClient(BlobClientConfig{
+		BeaconUrl:          "https://primary.example",
+		SecondaryBeaconUrl: "https://secondary.example/beacon",
+	}, nil)
+	Require(t, err)
+
+	if client.secondaryBeaconUrl == nil {
+		Fail(t, "secondary beacon URL was not configured")
+	}
+	if got, want := client.secondaryBeaconUrl.String(), "https://secondary.example/beacon"; got != want {
+		Fail(t, "secondary beacon URL mismatch", "got", got, "want", want)
+	}
+}
+
 func Require(t *testing.T, err error, printables ...interface{}) {
 	t.Helper()
 	testhelpers.RequireImpl(t, err, printables...)
