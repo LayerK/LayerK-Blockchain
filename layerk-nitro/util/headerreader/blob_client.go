@@ -234,6 +234,7 @@ func (b *BlobClient) blobSidecars(ctx context.Context, slot uint64, versionedHas
 
 	output := make([]kzg4844.Blob, len(versionedHashes))
 	outputsFound := make([]bool, len(versionedHashes))
+	outputIndexes := versionedHashOutputIndexes(versionedHashes)
 
 	for _, blobItem := range response {
 		var commitment kzg4844.Commitment
@@ -244,22 +245,14 @@ func (b *BlobClient) blobSidecars(ctx context.Context, slot uint64, versionedHas
 		// presumably in the order they were added to the tx. The spec is unclear if the blobs
 		// need to be returned in any particular order from the beacon API, so we put them back in
 		// the order from the tx.
-		var outputIdx int
-		var found bool
-		for outputIdx = range versionedHashes {
-			if versionedHashes[outputIdx] == versionedHash {
-				if outputsFound[outputIdx] {
-					// Duplicate, skip this one
-					break
-				}
-				found = true
-				outputsFound[outputIdx] = true
-				break
-			}
-		}
+		outputIdx, found := outputIndexes[versionedHash]
 		if !found {
 			continue
 		}
+		if outputsFound[outputIdx] {
+			continue
+		}
+		outputsFound[outputIdx] = true
 
 		copy(output[outputIdx][:], blobItem.Blob)
 
@@ -285,6 +278,16 @@ func (b *BlobClient) blobSidecars(ctx context.Context, slot uint64, versionedHas
 	}
 
 	return output, nil
+}
+
+func versionedHashOutputIndexes(versionedHashes []common.Hash) map[common.Hash]int {
+	outputIndexes := make(map[common.Hash]int, len(versionedHashes))
+	for i, versionedHash := range versionedHashes {
+		if _, exists := outputIndexes[versionedHash]; !exists {
+			outputIndexes[versionedHash] = i
+		}
+	}
+	return outputIndexes
 }
 
 func saveBlobDataToDisk(rawData json.RawMessage, slot uint64, blobDirectory string) error {

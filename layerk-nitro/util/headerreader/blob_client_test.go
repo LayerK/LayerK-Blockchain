@@ -16,6 +16,8 @@ import (
 
 	"github.com/r3labs/diff/v3"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/offchainlabs/nitro/util/testhelpers"
 )
 
@@ -145,6 +147,25 @@ func TestBeaconRequestCapsSuccessfulResponseBody(t *testing.T) {
 	_, err = beaconRequest[json.RawMessage](client, context.Background(), "/eth/v1/config/spec")
 	if err == nil {
 		Fail(t, "expected oversized beacon response to fail")
+	}
+}
+
+func TestVersionedHashOutputIndexesKeepsFirstDuplicate(t *testing.T) {
+	var first common.Hash
+	var second common.Hash
+	first[0] = 1
+	second[0] = 2
+
+	indexes := versionedHashOutputIndexes([]common.Hash{first, second, first})
+
+	if got, want := indexes[first], 0; got != want {
+		Fail(t, "unexpected first hash index", "got", got, "want", want)
+	}
+	if got, want := indexes[second], 1; got != want {
+		Fail(t, "unexpected second hash index", "got", got, "want", want)
+	}
+	if got, want := len(indexes), 2; got != want {
+		Fail(t, "unexpected index count", "got", got, "want", want)
 	}
 }
 
