@@ -3,6 +3,8 @@ package timeboost
 import (
 	"encoding/hex"
 	"math/big"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -48,6 +50,30 @@ func TestInsertAndFetchBids(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bids[0].Amount.String(), gotBids[0].Amount)
 	require.Equal(t, bids[1].Amount.String(), gotBids[1].Amount)
+}
+
+func TestNewDatabaseCreatesMissingDirectory(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "missing", "nested")
+	db, err := NewDatabase(dbPath)
+	require.NoError(t, err)
+	defer db.sqlDB.Close()
+
+	info, err := os.Stat(dbPath)
+	require.NoError(t, err)
+	require.True(t, info.IsDir())
+}
+
+func TestNewDatabaseRejectsFilePath(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(dbPath, []byte("x"), 0600))
+
+	_, err := NewDatabase(dbPath)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not a directory")
 }
 
 func TestInsertBids(t *testing.T) {

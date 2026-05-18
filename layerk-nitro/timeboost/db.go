@@ -3,7 +3,6 @@ package timeboost
 import (
 	"encoding/hex"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,10 +22,15 @@ type SqliteDatabase struct {
 
 func NewDatabase(path string) (*SqliteDatabase, error) {
 	//#nosec G304
-	if _, err := os.Stat(path); err != nil {
-		if err = os.MkdirAll(path, fs.ModeDir); err != nil {
-			return nil, err
+	if info, err := os.Stat(path); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("could not inspect database path %q: %w", path, err)
 		}
+		if err = os.MkdirAll(path, 0700); err != nil {
+			return nil, fmt.Errorf("could not create database path %q: %w", path, err)
+		}
+	} else if !info.IsDir() {
+		return nil, fmt.Errorf("database path %q is not a directory", path)
 	}
 	filePath := filepath.Join(path, sqliteFileName)
 	db, err := sqlx.Open("sqlite3", filePath)
