@@ -225,13 +225,7 @@ func (sm *manager) updatePriorityList(ctx context.Context, index int, target int
 		sm.priorityList[i], sm.priorityList[i-1] = sm.priorityList[i-1], sm.priorityList[i]
 	}
 
-	urlList := []string{}
-	for url := range sm.livelinessSet {
-		if _, ok := sm.prioritiesSet[url]; !ok {
-			urlList = append(urlList, url)
-		}
-	}
-	sm.nonPriorityList = urlList
+	sm.rebuildNonPriorityList()
 }
 
 // populateLists populates seq's in priority list and seq's that are online but not in priority
@@ -308,15 +302,19 @@ func (sm *manager) refreshAllLists(ctx context.Context) {
 		panic(err)
 	}
 	sm.priorityList = priorityList
-	sm.prioritiesSet = getMapfromlist(priorityList)
+	sm.prioritiesSet = getMapFromList(priorityList)
 
 	livelinessList, err := sm.redisCoordinator.GetLiveliness(ctx)
 	if err != nil {
 		panic(err)
 	}
-	sm.livelinessSet = getMapfromlist(livelinessList)
+	sm.livelinessSet = getMapFromList(livelinessList)
 
-	urlList := []string{}
+	sm.rebuildNonPriorityList()
+}
+
+func (sm *manager) rebuildNonPriorityList() {
+	urlList := make([]string, 0, len(sm.livelinessSet))
 	for url := range sm.livelinessSet {
 		if _, ok := sm.prioritiesSet[url]; !ok {
 			urlList = append(urlList, url)
@@ -325,8 +323,8 @@ func (sm *manager) refreshAllLists(ctx context.Context) {
 	sm.nonPriorityList = urlList
 }
 
-func getMapfromlist(list []string) map[string]bool {
-	mapping := make(map[string]bool)
+func getMapFromList(list []string) map[string]bool {
+	mapping := make(map[string]bool, len(list))
 	for _, url := range list {
 		mapping[url] = true
 	}
