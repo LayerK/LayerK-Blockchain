@@ -732,11 +732,13 @@ describe('Orbit Chain', () => {
       '0x7A0D94F55792C434d74a40883C6ed8545E406D12',
       '0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24',
     ]
-    deployedFactories.forEach(async factory => {
-      expect((await l2Provider.getCode(factory)).length).to.be.gt(
-        EMPTY_CODE_LENGTH
-      )
-    })
+    await Promise.all(
+      deployedFactories.map(async factory => {
+        expect((await l2Provider.getCode(factory)).length).to.be.gt(
+          EMPTY_CODE_LENGTH
+        )
+      })
+    )
   })
 
   it('can deploy deterministic factories to L2 through RollupCreator', async function () {
