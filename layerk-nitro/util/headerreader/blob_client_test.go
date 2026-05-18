@@ -9,7 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -47,7 +47,7 @@ func TestSaveBlobsToDisk(t *testing.T) {
 	err = saveBlobDataToDisk(rawData, 5, testDir)
 	Require(t, err)
 
-	filePath := path.Join(testDir, "5")
+	filePath := filepath.Join(testDir, "5")
 	file, err := os.Open(filePath)
 	Require(t, err)
 	defer file.Close()
@@ -61,6 +61,16 @@ func TestSaveBlobsToDisk(t *testing.T) {
 		changelog, err := diff.Diff(full.Data, response)
 		Require(t, err)
 		Fail(t, "blob data saved to disk does not match actual blob data", changelog)
+	}
+}
+
+func TestSaveBlobsToDiskReportsCreateError(t *testing.T) {
+	err := saveBlobDataToDisk(json.RawMessage(`[]`), 5, filepath.Join(t.TempDir(), "missing"))
+	if err == nil {
+		Fail(t, "expected saveBlobDataToDisk to fail for missing directory")
+	}
+	if !strings.Contains(err.Error(), "could not create file to store fetched blobs") {
+		Fail(t, "unexpected error", err)
 	}
 }
 

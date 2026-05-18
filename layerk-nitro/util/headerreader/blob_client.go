@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -290,21 +291,25 @@ func versionedHashOutputIndexes(versionedHashes []common.Hash) map[common.Hash]i
 	return outputIndexes
 }
 
-func saveBlobDataToDisk(rawData json.RawMessage, slot uint64, blobDirectory string) error {
-	filePath := path.Join(blobDirectory, fmt.Sprint(slot))
-	file, err := os.Create(filePath)
+func saveBlobDataToDisk(rawData json.RawMessage, slot uint64, blobDirectory string) (err error) {
+	filePath := filepath.Join(blobDirectory, fmt.Sprint(slot))
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		return fmt.Errorf("could not create file to store fetched blobs")
+		return fmt.Errorf("could not create file to store fetched blobs: %w", err)
 	}
+	defer func() {
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("failed to close blob data file: %w", closeErr)
+		}
+	}()
 	full := fullResult[json.RawMessage]{Data: rawData}
 	fullbytes, err := json.Marshal(full)
 	if err != nil {
-		return fmt.Errorf("unable to marshal data into bytes while attempting to store fetched blobs")
+		return fmt.Errorf("unable to marshal data into bytes while attempting to store fetched blobs: %w", err)
 	}
 	if _, err := file.Write(fullbytes); err != nil {
-		return fmt.Errorf("failed to write blob data to disk")
+		return fmt.Errorf("failed to write blob data to disk: %w", err)
 	}
-	file.Close()
 	return nil
 }
 
