@@ -151,9 +151,12 @@ func beaconRequest[T interface{}](b *BlobClient, ctx context.Context, beaconPath
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBeaconResponseBodyBytes+1))
 	if err != nil {
 		return empty, err
+	}
+	if len(body) > maxBeaconResponseBodyBytes {
+		return empty, fmt.Errorf("beacon response body exceeds limit of %d bytes", maxBeaconResponseBodyBytes)
 	}
 
 	var full fullResult[T]
@@ -200,6 +203,7 @@ type blobResponseItem struct {
 
 const trailingCharsOfResponse = 25
 const maxBeaconErrorBodyBytes = 4 * 1024
+const maxBeaconResponseBodyBytes = 8 * 1024 * 1024
 
 func (b *BlobClient) blobSidecars(ctx context.Context, slot uint64, versionedHashes []common.Hash) ([]kzg4844.Blob, error) {
 	rawData, err := beaconRequest[json.RawMessage](b, ctx, fmt.Sprintf("/eth/v1/beacon/blob_sidecars/%d", slot))

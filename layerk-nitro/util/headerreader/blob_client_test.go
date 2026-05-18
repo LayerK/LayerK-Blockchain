@@ -124,6 +124,30 @@ func TestBeaconRequestCapsAndClosesPrimaryErrorBodyBeforeSecondaryFallback(t *te
 	}
 }
 
+func TestBeaconRequestCapsSuccessfulResponseBody(t *testing.T) {
+	client, err := NewBlobClient(BlobClientConfig{
+		BeaconUrl: "https://beacon.example",
+	}, nil)
+	Require(t, err)
+
+	client.httpClient.Store(&http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Body:       io.NopCloser(strings.NewReader(strings.Repeat("x", maxBeaconResponseBodyBytes+1))),
+				Header:     make(http.Header),
+				Request:    req,
+			}, nil
+		}),
+	})
+
+	_, err = beaconRequest[json.RawMessage](client, context.Background(), "/eth/v1/config/spec")
+	if err == nil {
+		Fail(t, "expected oversized beacon response to fail")
+	}
+}
+
 type closeTrackingBody struct {
 	reader    *strings.Reader
 	closed    bool
