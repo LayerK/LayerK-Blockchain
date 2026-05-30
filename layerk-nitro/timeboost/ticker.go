@@ -26,18 +26,28 @@ func (t *roundTicker) tickAtReserveSubmissionDeadline(ctx context.Context) {
 }
 
 func (t *roundTicker) start(ctx context.Context, timeBeforeRoundStart time.Duration) {
+	timer := time.NewTimer(0)
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	defer timer.Stop()
+
 	for {
 		nextTick := t.roundTimingInfo.TimeTilNextRound() - timeBeforeRoundStart
 		if nextTick < 0 {
 			nextTick += t.roundTimingInfo.Round
 		}
+		timer.Reset(nextTick)
 
 		select {
-		case <-time.After(nextTick):
+		case tickTime := <-timer.C:
 			// The channel is buffered (cap 1) so a slow consumer must not wedge the
 			// ticker goroutine past ctx cancellation.
 			select {
-			case t.c <- time.Now():
+			case t.c <- tickTime:
 			case <-ctx.Done():
 				close(t.c)
 				return
