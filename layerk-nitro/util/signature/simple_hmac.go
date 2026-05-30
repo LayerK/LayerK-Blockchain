@@ -106,7 +106,9 @@ func LoadSigningKey(keyConfig string) (*common.Hash, error) {
 }
 
 func prependBytes(first []byte, rest ...[]byte) [][]byte {
-	return append([][]byte{first}, rest...)
+	ret := make([][]byte, 1, len(rest)+1)
+	ret[0] = first
+	return append(ret, rest...)
 }
 
 // On success, extracts the message from the message+signature data passed in, and returns it
