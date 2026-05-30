@@ -1,0 +1,158 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/layerk-bridge"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    target-branch: main
+    groups:
+      bridge-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: "/layerk-nitro"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    target-branch: main
+    groups:
+      nitro-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: "/layerk-stylus-sdk-wasm/examples/erc20/scripts"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-erc20-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: "/layerk-stylus-sdk-wasm/examples/erc721/scripts"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-erc721-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: "/layerk-stylus-sdk-wasm/examples/single_call/scripts"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-single-call-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: "/layerk-stylus-sdk-wasm/examples/erc20"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-erc20-cargo:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: "/layerk-stylus-sdk-wasm/examples/erc721"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-erc721-cargo:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: "/layerk-stylus-sdk-wasm/examples/single_call"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-single-call-cargo:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: "/layerk-stylus-sdk-wasm/mini-alloc"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      mini-alloc-cargo:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: "/layerk-stylus-sdk-wasm/stylus-core"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-core-cargo:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: "/layerk-stylus-sdk-wasm/stylus-proc"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-proc-cargo:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: "/layerk-stylus-sdk-wasm/stylus-sdk"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-sdk-cargo:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: "/layerk-stylus-sdk-wasm/stylus-test"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+    groups:
+      stylus-test-cargo:
+        patterns:
+          - "*"
+
+  - package-ecosystem: gitsubmodule
+    directory: "/layerk-bridge"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
+
+  - package-ecosystem: gitsubmodule
+    directory: "/layerk-nitro"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main

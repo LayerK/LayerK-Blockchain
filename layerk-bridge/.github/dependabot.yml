@@ -1,44 +1,19 @@
 version: 2
 updates:
-  - package-ecosystem: gomod
-    directory: '/packages/arb-node-core'
-    schedule:
-      interval: daily
-    open-pull-requests-limit: 10
-    target-branch: master
-  - package-ecosystem: gomod
-    directory: '/packages/arb-rpc-node'
-    schedule:
-      interval: daily
-    open-pull-requests-limit: 10
-    target-branch: master
-  - package-ecosystem: gomod
-    directory: '/packages/arb-avm-cpp'
-    schedule:
-      interval: daily
-    open-pull-requests-limit: 10
-    target-branch: master
-  - package-ecosystem: gomod
-    directory: '/packages/arb-evm'
-    schedule:
-      interval: daily
-    open-pull-requests-limit: 10
-    target-branch: master
-  - package-ecosystem: gomod
-    directory: '/packages/arb-util'
-    schedule:
-      interval: daily
-    open-pull-requests-limit: 10
-    target-branch: master
   - package-ecosystem: npm
-    directory: '/'
+    directory: "/"
     schedule:
-      interval: daily
-    open-pull-requests-limit: 10
-    target-branch: master
+      interval: weekly
+    open-pull-requests-limit: 5
+    target-branch: main
+    groups:
+      bridge-npm:
+        patterns:
+          - "*"
+
   - package-ecosystem: gitsubmodule
-    directory: '/packages/arb-avm-cpp/external'
+    directory: "/"
     schedule:
-      interval: daily
-    open-pull-requests-limit: 10
-    target-branch: master
+      interval: weekly
+    open-pull-requests-limit: 3
+    target-branch: main
