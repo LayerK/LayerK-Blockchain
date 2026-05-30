@@ -83,6 +83,8 @@ func (s *ValidationServer) Start(ctx_in context.Context) {
 		// consumer will start consuming iteratively.
 		ready := make(chan struct{}, 1)
 		s.StopWaiter.LaunchThread(func(ctx context.Context) {
+			ticker := time.NewTicker(time.Millisecond * 100)
+			defer ticker.Stop()
 			for {
 				if pubsub.StreamExists(ctx, c.StreamName(), c.RedisClient()) {
 					ready <- struct{}{}
@@ -93,7 +95,7 @@ func (s *ValidationServer) Start(ctx_in context.Context) {
 				case <-ctx.Done():
 					log.Info("Context done while checking redis stream existence", "err", ctx.Err())
 					return
-				case <-time.After(time.Millisecond * 100):
+				case <-ticker.C:
 				}
 			}
 		})
@@ -134,17 +136,18 @@ func (s *ValidationServer) Start(ctx_in context.Context) {
 		})
 	}
 	s.StopWaiter.LaunchThread(func(ctx context.Context) {
-		for {
-			select {
-			case <-readyStreams:
-				log.Debug("At least one stream is ready")
-				return // Don't block Start if at least one of the stream is ready.
-			case <-time.After(s.config.StreamTimeout):
-				log.Error("Waiting for redis streams timed out")
-			case <-ctx.Done():
-				log.Info("Context done while waiting redis streams to be ready, failed to start")
-				return
-			}
+		timer := time.NewTimer(s.config.StreamTimeout)
+		defer timer.Stop()
+		select {
+		case <-readyStreams:
+			log.Debug("At least one stream is ready")
+			return // Don't block Start if at least one of the stream is ready.
+		case <-timer.C:
+			log.Error("Waiting for redis streams timed out")
+			return
+		case <-ctx.Done():
+			log.Info("Context done while waiting redis streams to be ready, failed to start")
+			return
 		}
 	})
 	for i := 0; i < workers; i++ {
