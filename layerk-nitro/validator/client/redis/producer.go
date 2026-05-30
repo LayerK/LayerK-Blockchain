@@ -131,18 +131,44 @@ func (c *ValidationClient) WasmModuleRoots() ([]common.Hash, error) {
 
 func (c *ValidationClient) Launch(entry *validator.ValidationInput, moduleRoot common.Hash) validator.ValidationRun {
 	c.room.Add(-1)
-	defer c.room.Add(1)
+	var roomReleased atomic.Bool
+	releaseRoom := func() {
+		if roomReleased.CompareAndSwap(false, true) {
+			c.room.Add(1)
+		}
+	}
 	producer, found := c.producers[moduleRoot]
 	if !found {
+		releaseRoom()
 		errPromise := containers.NewReadyPromise(validator.GoGlobalState{}, fmt.Errorf("no validation is configured for wasm root %v", moduleRoot))
 		return server_common.NewValRun(errPromise, moduleRoot)
 	}
-	promise, err := producer.Produce(c.GetContext(), entry)
+	ctx, err := c.GetContextSafe()
 	if err != nil {
+		releaseRoom()
+		errPromise := containers.NewReadyPromise(validator.GoGlobalState{}, err)
+		return server_common.NewValRun(errPromise, moduleRoot)
+	}
+	promise, err := producer.Produce(ctx, entry)
+	if err != nil {
+		releaseRoom()
 		errPromise := containers.NewReadyPromise(validator.GoGlobalState{}, fmt.Errorf("error producing input: %w", err))
 		return server_common.NewValRun(errPromise, moduleRoot)
 	}
-	return server_common.NewValRun(promise, moduleRoot)
+	trackedPromise := containers.NewPromise[validator.GoGlobalState](func() {
+		promise.Cancel()
+		releaseRoom()
+	})
+	c.LaunchUntrackedThread(func() {
+		defer releaseRoom()
+		res, err := promise.Await(ctx)
+		if err != nil {
+			trackedPromise.ProduceError(err)
+		} else {
+			trackedPromise.Produce(res)
+		}
+	})
+	return server_common.NewValRun(&trackedPromise, moduleRoot)
 }
 
 func (c *ValidationClient) Start(ctx_in context.Context) error {
@@ -173,5 +199,9 @@ func (c *ValidationClient) StylusArchs() []rawdb.WasmTarget {
 }
 
 func (c *ValidationClient) Room() int {
-	return int(c.room.Load())
+	room := c.room.Load()
+	if room < 0 {
+		return 0
+	}
+	return int(room)
 }
