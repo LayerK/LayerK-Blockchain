@@ -111,11 +111,10 @@ func (b *Backend) GetAssertions(ctx context.Context, opts ...db.AssertionOption)
 }
 
 func (b *Backend) GetCollectMachineHashes(ctx context.Context, opts ...db.CollectMachineHashesOption) ([]*api.JsonCollectMachineHashes, error) {
-	query := &db.CollectMachineHashesQuery{}
-	for _, o := range opts {
-		o(query)
-	}
 	collectMachineHashes, err := b.db.GetCollectMachineHashes(opts...)
+	if err != nil {
+		return nil, err
+	}
 	for _, cmh := range collectMachineHashes {
 		if cmh.RawStepHeights != "" {
 			stepHeightsStr := strings.Split(cmh.RawStepHeights, ",")
@@ -136,9 +135,6 @@ func (b *Backend) GetCollectMachineHashes(ctx context.Context, opts ...db.Collec
 			}
 			cmh.StepHeights = stepHeights
 		}
-	}
-	if err != nil {
-		return nil, err
 	}
 	return collectMachineHashes, nil
 }
