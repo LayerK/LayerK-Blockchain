@@ -7,15 +7,16 @@
   resolved "https://registry.yarnpkg.com/@aashutoshrathi/word-wrap/-/word-wrap-1.2.6.tgz#bd9154aec9983f77b3a034ecaa015c2e4201f6cf"
   integrity sha512-1Yjs2SvM8TflER/OD3cOjhWWOZb58A2t7wpE2S9XfBYTiIl+XFhQG2bjy4Pu1I+EAlCNUzRDYDdFwFYUKvXcIA==
 
-"@arbitrum/nitro-contracts@1.1.1":
-  version "1.1.1"
-  resolved "https://registry.yarnpkg.com/@arbitrum/nitro-contracts/-/nitro-contracts-1.1.1.tgz#2d8a2f9ab757bb7654562aebe435bff833c4b98d"
-  integrity sha512-4Tyk3XVHz+bm8UujUC78LYSw3xAxyYvBCxfEX4z3qE4/ww7Qck/rmce5gbHMzQjArEAzAP2YSfYIFuIFuRXtfg==
+"@arbitrum/nitro-contracts@^2.1.0":
+  version "2.1.0"
+  resolved "https://registry.npmjs.org/@arbitrum/nitro-contracts/-/nitro-contracts-2.1.0.tgz#b2900c0b9fad38716dce29c2b3cc96eb35611b55"
+  integrity sha512-Bh89H5/ihWVcAI2eNBc1McybZAmpTHJ5eFLauLz8bjicZTOD545vSYAreJN41Uo+AlHKVAMtODUQdoP0NVtg3Q==
   dependencies:
     "@offchainlabs/upgrade-executor" "1.1.0-beta.0"
     "@openzeppelin/contracts" "4.5.0"
     "@openzeppelin/contracts-upgradeable" "4.5.2"
     patch-package "^6.4.7"
+    solady "0.0.182"
 
 "@arbitrum/sdk@^3.1.3":
   version "3.1.9"
@@ -938,6 +939,11 @@
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts-upgradeable/-/contracts-upgradeable-4.8.3.tgz#6b076a7b751811b90fe3a172a7faeaa603e13a3f"
   integrity sha512-SXDRl7HKpl2WDoJpn7CK/M9U4Z8gNXDHHChAKh0Iz+Wew3wu6CmFYBeie3je8V0GSXZAIYYwUktSrnW/kwVPtg==
 
+"@openzeppelin/contracts-upgradeable@^4.9.5":
+  version "4.9.5"
+  resolved "https://registry.npmjs.org/@openzeppelin/contracts-upgradeable/-/contracts-upgradeable-4.9.5.tgz#572b5da102fc9be1d73f34968e0ca56765969812"
+  integrity sha512-f7L1//4sLlflAN7fVzJLoRedrf5Na3Oal5PZfIq55NFcVZ90EpV1q5xOvL4lFvg3MNICSDr2hH0JUBxwlxcoPg==
+
 "@openzeppelin/contracts@4.5.0":
   version "4.5.0"
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.5.0.tgz#3fd75d57de172b3743cdfc1206883f56430409cc"
@@ -952,6 +958,11 @@
   version "4.8.3"
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.8.3.tgz#cbef3146bfc570849405f59cba18235da95a252a"
   integrity sha512-bQHV8R9Me8IaJoJ2vPG4rXcL7seB7YVuskr4f+f5RyOStSZetwzkWtoqDMl5erkBJy0lDRUnIR2WIkPiC0GJlg==
+
+"@openzeppelin/contracts@^4.9.5":
+  version "4.9.5"
+  resolved "https://registry.npmjs.org/@openzeppelin/contracts/-/contracts-4.9.5.tgz#1eed23d4844c861a1835b5d33507c1017fa98de8"
+  integrity sha512-ZK+W5mVhRppff9BE6YdR8CC52C8zAvsVAiWhEtQ5+oNxFE6h1WdeWo+FJSF8KKvtxxVYZ7MTP/5KoVpAU3aSWg==
 
 "@openzeppelin/upgrades-core@^1.24.1":
   version "1.28.0"
