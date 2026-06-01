@@ -134,6 +134,35 @@ func TestAccumulator4(t *testing.T) {
 	testSerDe(mt, t)
 }
 
+func TestDeserializeRetriesAfterNoProgressRead(t *testing.T) {
+	mt := NewEmptyMerkleTree().Append(pseudorandomForTesting(0))
+	var wr bytes.Buffer
+	if err := mt.Serialize(&wr); err != nil {
+		Fail(t, err)
+	}
+	rd := &zeroThenReader{inner: bytes.NewReader(wr.Bytes())}
+	result, err := NewMerkleTreeFromReader(rd)
+	if err != nil {
+		Fail(t, err)
+	}
+	if mt.Hash() != result.Hash() {
+		Fail(t)
+	}
+}
+
+type zeroThenReader struct {
+	inner      *bytes.Reader
+	returnZero bool
+}
+
+func (r *zeroThenReader) Read(p []byte) (int, error) {
+	if !r.returnZero {
+		r.returnZero = true
+		return 0, nil
+	}
+	return r.inner.Read(p)
+}
+
 func testAllSummarySizes(tree MerkleTree, t *testing.T) {
 	for i := uint64(1); i <= tree.Size(); i++ {
 		sum := tree.SummarizeUpTo(i)
