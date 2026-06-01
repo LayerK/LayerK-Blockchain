@@ -278,7 +278,7 @@ func (sum *merkleCompleteSubtreeSummary) Serialize(wr io.Writer) error {
 
 func NewMerkleTreeFromReader(rd io.Reader) (MerkleTree, error) {
 	var typeBuf [1]byte
-	if _, err := rd.Read(typeBuf[:]); err != nil {
+	if _, err := io.ReadFull(rd, typeBuf[:]); err != nil {
 		return nil, err
 	}
 	switch typeBuf[0] {
