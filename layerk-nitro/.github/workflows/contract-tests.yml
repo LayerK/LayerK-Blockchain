@@ -9,6 +9,9 @@ on:
       - master
       - develop
 
+permissions:
+  contents: read
+
 jobs:
   test-unit:
     name: Test unit
