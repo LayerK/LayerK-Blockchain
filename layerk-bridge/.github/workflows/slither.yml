@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   pull_request:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
