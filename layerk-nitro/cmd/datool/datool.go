@@ -130,7 +130,7 @@ func startClientStore(args []string) error {
 	var signer signature.DataSignerFunc
 	if config.SigningKey != "" {
 		var privateKey *ecdsa.PrivateKey
-		if config.SigningKey[:2] == "0x" {
+		if strings.HasPrefix(config.SigningKey, "0x") {
 			privateKey, err = crypto.HexToECDSA(config.SigningKey[2:])
 			if err != nil {
 				return err
