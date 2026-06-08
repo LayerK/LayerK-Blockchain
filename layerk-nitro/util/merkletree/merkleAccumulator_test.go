@@ -135,18 +135,28 @@ func TestAccumulator4(t *testing.T) {
 }
 
 func TestDeserializeRetriesAfterNoProgressRead(t *testing.T) {
-	mt := NewEmptyMerkleTree().Append(pseudorandomForTesting(0))
-	var wr bytes.Buffer
-	if err := mt.Serialize(&wr); err != nil {
-		Fail(t, err)
+	leaf := NewEmptyMerkleTree().Append(pseudorandomForTesting(0))
+	internal := leaf.Append(pseudorandomForTesting(1))
+	trees := []MerkleTree{
+		NewEmptyMerkleTree(),
+		leaf,
+		internal,
+		internal.SummarizeUpTo(internal.Size()),
 	}
-	rd := &zeroThenReader{inner: bytes.NewReader(wr.Bytes())}
-	result, err := NewMerkleTreeFromReader(rd)
-	if err != nil {
-		Fail(t, err)
-	}
-	if mt.Hash() != result.Hash() {
-		Fail(t)
+
+	for _, mt := range trees {
+		var wr bytes.Buffer
+		if err := mt.Serialize(&wr); err != nil {
+			Fail(t, err)
+		}
+		rd := &zeroThenReader{inner: bytes.NewReader(wr.Bytes())}
+		result, err := NewMerkleTreeFromReader(rd)
+		if err != nil {
+			Fail(t, err)
+		}
+		if mt.Hash() != result.Hash() || mt.Size() != result.Size() || mt.Capacity() != result.Capacity() {
+			Fail(t)
+		}
 	}
 }
 
