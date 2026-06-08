@@ -77,7 +77,11 @@ type WavmInbox struct{}
 func (i WavmInbox) PeekSequencerInbox() ([]byte, common.Hash, error) {
 	pos := wavmio.GetInboxPosition()
 	res := wavmio.ReadInboxMessage(pos)
-	log.Info("PeekSequencerInbox", "pos", pos, "res[:8]", res[:8])
+	resPreview := res
+	if len(resPreview) > 8 {
+		resPreview = resPreview[:8]
+	}
+	log.Info("PeekSequencerInbox", "pos", pos, "res[:8]", resPreview)
 	// Our BlobPreimageReader doesn't need the block hash
 	return res, common.Hash{}, nil
 }
