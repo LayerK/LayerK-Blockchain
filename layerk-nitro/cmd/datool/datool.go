@@ -41,15 +41,23 @@ func main() {
 	var err error
 	switch strings.ToLower(args[1]) {
 	case "client":
-		err = startClient(args[2:])
+		if len(args) < 3 {
+			err = errors.New("usage: datool client [rpc|rest] ...")
+		} else {
+			err = startClient(args[2:])
+		}
 	case "keygen":
 		err = startKeyGen(args[2:])
 	case "generatehash":
-		err = generateHash(args[2])
+		if len(args) < 3 {
+			err = errors.New("usage: datool generatehash <message>")
+		} else {
+			err = generateHash(args[2])
+		}
 	case "dumpkeyset":
 		err = dumpKeyset(args[2:])
 	default:
-		panic(fmt.Sprintf("Unknown tool '%s' specified, valid tools are 'client', 'keygen', 'generatehash'", args[1]))
+		panic(fmt.Sprintf("Unknown tool '%s' specified, valid tools are 'client', 'keygen', 'generatehash', 'dumpkeyset'", args[1]))
 	}
 	if err != nil {
 		panic(err)
@@ -59,8 +67,14 @@ func main() {
 // datool client ...
 
 func startClient(args []string) error {
+	if len(args) < 1 {
+		return errors.New("datool client requires 'rpc' or 'rest'")
+	}
 	switch strings.ToLower(args[0]) {
 	case "rpc":
+		if len(args) < 2 {
+			return errors.New("datool client rpc requires 'store'")
+		}
 		switch strings.ToLower(args[1]) {
 		case "store":
 			return startClientStore(args[2:])
@@ -69,6 +83,9 @@ func startClient(args []string) error {
 
 		}
 	case "rest":
+		if len(args) < 2 {
+			return errors.New("datool client rest requires 'getByHash'")
+		}
 		switch strings.ToLower(args[1]) {
 		case "getbyhash":
 			return startRESTClientGetByHash(args[2:])
