@@ -30,3 +30,9 @@ Prepared for the LayerK Blockchain mono-repo to highlight near-term security wor
 - **Follow-up actions:**
   - Confirm whether the deprecated monitors are still deployed anywhere.
   - If active, move maintained monitor code out of `layerk-api` and add configurable confirmation depth, replay protection, signed alerts, and RPC failover.
+
+## 5. Merkle tree deserialization hardened (landed)
+- **Status:** `NewMerkleTreeFromReader` now reads the serialized node-type byte with `io.ReadFull` instead of a single `Read` call, and the Merkle accumulator tests cover readers that temporarily report no progress.
+- **Risk reduced:** A short or zero-progress read can no longer be interpreted as a valid leaf node type before the serialized stream has actually supplied the node discriminator.
+- **Follow-up actions:**
+  - Re-run the Merkle tree Go tests in CI before shipping, since local Go execution is intentionally skipped in this workspace.
