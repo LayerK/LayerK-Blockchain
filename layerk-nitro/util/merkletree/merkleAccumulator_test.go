@@ -199,7 +199,7 @@ func testSerDe(tree MerkleTree, t *testing.T) {
 	if err != nil {
 		Fail(t, err)
 	}
-	if tree.Hash() != result.Hash() {
+	if tree.Hash() != result.Hash() || tree.Size() != result.Size() || tree.Capacity() != result.Capacity() {
 		Fail(t)
 	}
 }
