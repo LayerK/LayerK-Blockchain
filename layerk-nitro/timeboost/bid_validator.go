@@ -309,6 +309,31 @@ func (bv *BidValidator) fetchReservePrice() *big.Int {
 	return bv.reservePrice
 }
 
+func (bv *BidValidator) tooManyBidsError(bidder common.Address, numBids uint8) error {
+	return errors.Wrapf(ErrTooManyBids, "bidder %s has already sent the maximum allowed bids = %d in this round", bidder.Hex(), numBids)
+}
+
+func (bv *BidValidator) checkBidLimit(bidder common.Address) error {
+	bv.RLock()
+	defer bv.RUnlock()
+	numBids := bv.bidsPerSenderInRound[bidder]
+	if numBids >= bv.maxBidsPerSenderInRound {
+		return bv.tooManyBidsError(bidder, numBids)
+	}
+	return nil
+}
+
+func (bv *BidValidator) recordAcceptedBid(bidder common.Address) error {
+	bv.Lock()
+	defer bv.Unlock()
+	numBids := bv.bidsPerSenderInRound[bidder]
+	if numBids >= bv.maxBidsPerSenderInRound {
+		return bv.tooManyBidsError(bidder, numBids)
+	}
+	bv.bidsPerSenderInRound[bidder] = numBids + 1
+	return nil
+}
+
 // Check time-related constraints for bid.
 // It's useful to split out to be able to re-check just these contraints after
 // time has elapsed.
@@ -389,17 +414,9 @@ func (bv *BidValidator) validateBid(
 	if !crypto.VerifySignature(crypto.CompressPubkey(pubkey), bidHash[:], sigItem[:64]) {
 		return nil, errors.New("invalid signature")
 	}
-	bv.Lock()
-	numBids, ok := bv.bidsPerSenderInRound[bidder]
-	if !ok {
-		bv.bidsPerSenderInRound[bidder] = 0
+	if err := bv.checkBidLimit(bidder); err != nil {
+		return nil, err
 	}
-	if numBids >= bv.maxBidsPerSenderInRound {
-		bv.Unlock()
-		return nil, errors.Wrapf(ErrTooManyBids, "bidder %s has already sent the maximum allowed bids = %d in this round", bidder.Hex(), numBids)
-	}
-	bv.bidsPerSenderInRound[bidder]++
-	bv.Unlock()
 
 	depositBal, err := balanceCheckerFn(&bind.CallOpts{}, bidder)
 	if err != nil {
@@ -436,6 +453,10 @@ func (bv *BidValidator) validateBid(
 		if err != nil {
 			return nil, fmt.Errorf("error validating bid via eth_call auction resolution: %w", err)
 		}
+	}
+
+	if err := bv.recordAcceptedBid(bidder); err != nil {
+		return nil, err
 	}
 
 	vb := &ValidatedBid{
