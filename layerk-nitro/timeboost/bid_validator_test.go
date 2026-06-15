@@ -169,6 +169,40 @@ func TestBidValidator_validateBid_perRoundBidLimitReached(t *testing.T) {
 
 }
 
+func TestBidValidator_validateBid_failedBalanceDoesNotConsumeBidLimit(t *testing.T) {
+	t.Parallel()
+	auctionContractAddr := common.Address{'a'}
+	bv := BidValidator{
+		chainId: big.NewInt(1),
+		roundTimingInfo: RoundTimingInfo{
+			Offset:         time.Now().Add(-time.Second),
+			Round:          time.Minute,
+			AuctionClosing: 45 * time.Second,
+		},
+		reservePrice:                   big.NewInt(2),
+		bidsPerSenderInRound:           make(map[common.Address]uint8),
+		maxBidsPerSenderInRound:        1,
+		auctionContractAddr:            auctionContractAddr,
+		auctionContractDomainSeparator: common.Hash{},
+	}
+	bid := buildValidBid(t, auctionContractAddr)
+
+	zeroBalance := func(_ *bind.CallOpts, _ common.Address) (*big.Int, error) {
+		return big.NewInt(0), nil
+	}
+	_, err := bv.validateBid(bid, zeroBalance)
+	require.ErrorIs(t, err, ErrNotDepositor)
+	require.Empty(t, bv.bidsPerSenderInRound)
+
+	validBalance := func(_ *bind.CallOpts, _ common.Address) (*big.Int, error) {
+		return big.NewInt(10), nil
+	}
+	_, err = bv.validateBid(bid, validBalance)
+	require.NoError(t, err)
+	_, err = bv.validateBid(bid, validBalance)
+	require.ErrorIs(t, err, ErrTooManyBids)
+}
+
 func makeValidSignature(t *testing.T, err error, bidHash common.Hash, privateKey *ecdsa.PrivateKey) []byte {
 	signature, err := crypto.Sign(bidHash[:], privateKey)
 	require.NoError(t, err)
