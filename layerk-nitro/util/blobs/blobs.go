@@ -63,7 +63,8 @@ func EncodeBlobs(data []byte) ([]kzg4844.Blob, error) {
 	if err != nil {
 		return nil, err
 	}
-	var blobs []kzg4844.Blob
+	blobCount := (len(data) + BlobEncodableData - 1) / BlobEncodableData
+	blobs := make([]kzg4844.Blob, 0, blobCount)
 	for len(data) > 0 {
 		var b kzg4844.Blob
 		data = fillBlobBytes(b[:], data)
