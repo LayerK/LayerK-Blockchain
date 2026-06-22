@@ -3,6 +3,11 @@
 
 package containers
 
+const (
+	minQueueCapacity  = 8
+	queueShrinkFactor = 4
+)
+
 // Queue is a FIFO queue backed by a ring-buffer slice for O(1) push and pop.
 type Queue[T any] struct {
 	slice []T
@@ -20,13 +25,38 @@ func (q *Queue[T]) Push(item T) {
 }
 
 func (q *Queue[T]) grow() {
-	newCap := 8
+	newCap := minQueueCapacity
 	if len(q.slice) > 0 {
 		newCap = len(q.slice) * 2
 	}
+	q.resize(newCap)
+}
+
+func (q *Queue[T]) shrink() {
+	if q.count == 0 {
+		q.slice = nil
+		q.head = 0
+		return
+	}
+	if len(q.slice) <= minQueueCapacity || q.count > len(q.slice)/queueShrinkFactor {
+		return
+	}
+	newCap := len(q.slice) / 2
+	if newCap < minQueueCapacity {
+		newCap = minQueueCapacity
+	}
+	q.resize(newCap)
+}
+
+func (q *Queue[T]) resize(newCap int) {
 	newSlice := make([]T, newCap)
-	for i := 0; i < q.count; i++ {
-		newSlice[i] = q.slice[(q.head+i)%len(q.slice)]
+	if q.count > 0 {
+		if q.head+q.count <= len(q.slice) {
+			copy(newSlice, q.slice[q.head:q.head+q.count])
+		} else {
+			first := copy(newSlice, q.slice[q.head:])
+			copy(newSlice[first:], q.slice[:q.count-first])
+		}
 	}
 	q.slice = newSlice
 	q.head = 0
@@ -41,6 +71,7 @@ func (q *Queue[T]) Pop() T {
 	q.slice[q.head] = empty // release reference for GC
 	q.head = (q.head + 1) % len(q.slice)
 	q.count--
+	q.shrink()
 	return item
 }
 
