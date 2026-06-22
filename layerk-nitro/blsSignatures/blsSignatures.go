@@ -192,15 +192,21 @@ func hashToG1Curve(message []byte, keyValidationMode bool) (*bls12381.PointG1, e
 
 func PublicKeyToBytes(pub PublicKey) []byte {
 	g2 := bls12381.NewG2()
-	if pub.validityProof == nil {
-		return append([]byte{0}, g2.ToBytes(pub.key)...)
-	}
 	keyBytes := g2.ToBytes(pub.key)
+	if pub.validityProof == nil {
+		out := make([]byte, 1+len(keyBytes))
+		copy(out[1:], keyBytes)
+		return out
+	}
 	sigBytes := SignatureToBytes(pub.validityProof)
 	if len(sigBytes) > 255 {
 		panic("validity proof too large to serialize")
 	}
-	return append(append([]byte{byte(len(sigBytes))}, sigBytes...), keyBytes...)
+	out := make([]byte, 1+len(sigBytes)+len(keyBytes))
+	out[0] = byte(len(sigBytes))
+	copy(out[1:], sigBytes)
+	copy(out[1+len(sigBytes):], keyBytes)
+	return out
 }
 
 func PublicKeyFromBytes(in []byte, trustedSource bool) (PublicKey, error) {
