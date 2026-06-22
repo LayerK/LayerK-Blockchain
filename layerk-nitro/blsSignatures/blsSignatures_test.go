@@ -4,6 +4,7 @@
 package blsSignatures
 
 import (
+	"bytes"
 	"math/rand"
 	"testing"
 	"time"
@@ -137,6 +138,32 @@ func TestSignatureAggregationDifferentMessages(t *testing.T) {
 	Require(t, err)
 	if !verified {
 		Fail(t, "First aggregated signature check failed")
+	}
+}
+
+func TestPublicKeySerializationRoundTrip(t *testing.T) {
+	pub, _, err := GenerateKeys()
+	Require(t, err)
+
+	encoded := PublicKeyToBytes(pub)
+	decoded, err := PublicKeyFromBytes(encoded, false)
+	Require(t, err)
+
+	if got := PublicKeyToBytes(decoded); !bytes.Equal(got, encoded) {
+		Fail(t, "public key serialization did not round trip")
+	}
+}
+
+func TestTrustedPublicKeySerializationRoundTrip(t *testing.T) {
+	pub, _, err := GenerateKeys()
+	Require(t, err)
+
+	encoded := PublicKeyToBytes(pub.ToTrusted())
+	decoded, err := PublicKeyFromBytes(encoded, true)
+	Require(t, err)
+
+	if got := PublicKeyToBytes(decoded); !bytes.Equal(got, encoded) {
+		Fail(t, "trusted public key serialization did not round trip")
 	}
 }
 
