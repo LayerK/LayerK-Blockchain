@@ -10,7 +10,7 @@ import (
 // PaddedKeccak256 pads each argument to 32 bytes, concatenates and returns
 // keccak256 hash of the result.
 func PaddedKeccak256(args ...[]byte) []byte {
-	var data []byte
+	data := make([]byte, 0, len(args)*common.HashLength)
 	for _, arg := range args {
 		data = append(data, common.BytesToHash(arg).Bytes()...)
 	}
