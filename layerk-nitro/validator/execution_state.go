@@ -40,18 +40,16 @@ type ExecutionState struct {
 	MachineStatus MachineStatus
 }
 
-func u64ToBe(x uint64) []byte {
-	data := make([]byte, 8)
-	binary.BigEndian.PutUint64(data, x)
-	return data
-}
-
 func (s GoGlobalState) Hash() common.Hash {
-	data := []byte("Global state:")
+	data := make([]byte, 0, len("Global state:")+2*common.HashLength+16)
+	data = append(data, "Global state:"...)
 	data = append(data, s.BlockHash.Bytes()...)
 	data = append(data, s.SendRoot.Bytes()...)
-	data = append(data, u64ToBe(s.Batch)...)
-	data = append(data, u64ToBe(s.PosInBatch)...)
+	var u64Buf [8]byte
+	binary.BigEndian.PutUint64(u64Buf[:], s.Batch)
+	data = append(data, u64Buf[:]...)
+	binary.BigEndian.PutUint64(u64Buf[:], s.PosInBatch)
+	data = append(data, u64Buf[:]...)
 	return crypto.Keccak256Hash(data)
 }
 
