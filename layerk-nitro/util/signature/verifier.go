@@ -65,6 +65,9 @@ var TestingFeedVerifierConfig = VerifierConfig{
 func NewVerifier(config *VerifierConfig, addrVerifier contracts.AddressVerifierInterface) (*Verifier, error) {
 	authorizedMap := make(map[common.Address]struct{}, len(config.AllowedAddresses))
 	for _, addrString := range config.AllowedAddresses {
+		if !common.IsHexAddress(addrString) {
+			return nil, fmt.Errorf("invalid allowed address %q", addrString)
+		}
 		addr := common.HexToAddress(addrString)
 		authorizedMap[addr] = struct{}{}
 	}
