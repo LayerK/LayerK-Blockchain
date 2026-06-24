@@ -6,6 +6,7 @@ package signature
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -44,6 +45,15 @@ func TestVerifier(t *testing.T) {
 	err = verifier.VerifyData(ctx, signature, badData)
 	if !errors.Is(err, ErrSignatureNotVerified) {
 		t.Error("unexpected error", err)
+	}
+}
+
+func TestVerifierRejectsInvalidAllowedAddress(t *testing.T) {
+	config := TestingFeedVerifierConfig
+	config.AllowedAddresses = []string{"not-an-address"}
+	_, err := NewVerifier(&config, nil)
+	if err == nil || !strings.Contains(err.Error(), "invalid allowed address") {
+		t.Fatalf("expected invalid allowed address error, got %v", err)
 	}
 }
 
