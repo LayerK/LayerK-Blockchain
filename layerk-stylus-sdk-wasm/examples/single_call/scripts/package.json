@@ -6,13 +6,13 @@
     "increment": "node src/main.js"
   },
   "dependencies": {
-    "@nomicfoundation/hardhat-ethers": "^3.0.6",
-    "@nomicfoundation/hardhat-ignition": "^0.15.5",
-    "@nomicfoundation/hardhat-ignition-ethers": "^0.15.5",
-    "@nomicfoundation/hardhat-verify": "^2.0.8",
-    "@nomicfoundation/ignition-core": "^0.15.5",
-    "dotenv": "^16.4.5",
+    "@nomicfoundation/hardhat-ethers": "^4.0.13",
+    "@nomicfoundation/hardhat-ignition": "^3.1.7",
+    "@nomicfoundation/hardhat-ignition-ethers": "^3.1.6",
+    "@nomicfoundation/hardhat-verify": "^3.0.20",
+    "@nomicfoundation/ignition-core": "^3.1.7",
+    "dotenv": "^17.4.2",
     "ethers": "^6.13.1",
-    "hardhat": "^2.22.5"
+    "hardhat": "^3.9.0"
   }
 }
