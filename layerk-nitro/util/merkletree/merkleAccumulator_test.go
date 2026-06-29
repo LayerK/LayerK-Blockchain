@@ -134,7 +134,7 @@ func TestAccumulator4(t *testing.T) {
 	testSerDe(mt, t)
 }
 
-func TestDeserializeRetriesAfterNoProgressRead(t *testing.T) {
+func TestDeserializeRetriesNodeTypeReadsAfterNoProgress(t *testing.T) {
 	leaf := NewEmptyMerkleTree().Append(pseudorandomForTesting(0))
 	internal := leaf.Append(pseudorandomForTesting(1))
 	trees := []MerkleTree{
@@ -149,7 +149,7 @@ func TestDeserializeRetriesAfterNoProgressRead(t *testing.T) {
 		if err := mt.Serialize(&wr); err != nil {
 			Fail(t, err)
 		}
-		rd := &zeroThenReader{inner: bytes.NewReader(wr.Bytes())}
+		rd := &zeroBeforeByteReader{inner: bytes.NewReader(wr.Bytes())}
 		result, err := NewMerkleTreeFromReader(rd)
 		if err != nil {
 			Fail(t, err)
@@ -160,16 +160,17 @@ func TestDeserializeRetriesAfterNoProgressRead(t *testing.T) {
 	}
 }
 
-type zeroThenReader struct {
-	inner      *bytes.Reader
-	returnZero bool
+type zeroBeforeByteReader struct {
+	inner    *bytes.Reader
+	zeroNext bool
 }
 
-func (r *zeroThenReader) Read(p []byte) (int, error) {
-	if !r.returnZero {
-		r.returnZero = true
+func (r *zeroBeforeByteReader) Read(p []byte) (int, error) {
+	if len(p) == 1 && !r.zeroNext {
+		r.zeroNext = true
 		return 0, nil
 	}
+	r.zeroNext = false
 	return r.inner.Read(p)
 }
 
