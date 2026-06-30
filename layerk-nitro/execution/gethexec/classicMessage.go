@@ -47,10 +47,10 @@ func (m *ClassicOutboxRetriever) GetMsg(batchNum *big.Int, index uint64) (*Class
 	lowest := uint64(0)
 	var root common.Hash
 	copy(root[:], batchHeader[8:40])
-	if merkleSize < index {
+	if merkleSize <= index {
 		return nil, fmt.Errorf("batch %d only has %d indexes", batchNum, merkleSize)
 	}
-	proofNodes := [][32]byte{}
+	proofNodes := make([][32]byte, 0, bits.Len64(merkleSize))
 	pathInt := big.NewInt(0)
 	for merkleSize > 1 {
 		merkleNode, err := m.db.Get(root[:])
@@ -74,18 +74,21 @@ func (m *ClassicOutboxRetriever) GetMsg(batchNum *big.Int, index uint64) (*Class
 		if index < lowest+merkleLeftSize {
 			// take a left turn
 			copy(root[:], leftHash[:])
-			proofNodes = append([][32]byte{rightHash}, proofNodes...)
+			proofNodes = append(proofNodes, rightHash)
 			// lowest doesn't change
 			merkleSize = merkleLeftSize
 			pathInt.Add(pathInt, common.Big1)
 		} else {
 			// take a right turn
 			copy(root[:], rightHash[:])
-			proofNodes = append([][32]byte{leftHash}, proofNodes...)
+			proofNodes = append(proofNodes, leftHash)
 			lowest = lowest + merkleLeftSize
 			merkleSize = merkleSize - merkleLeftSize
 			// equivalent bit in pathInt is zero
 		}
+	}
+	for i, j := 0, len(proofNodes)-1; i < j; i, j = i+1, j-1 {
+		proofNodes[i], proofNodes[j] = proofNodes[j], proofNodes[i]
 	}
 	if index != lowest {
 		return nil, errors.New("unexpected error moving through merkle tree")
