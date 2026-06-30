@@ -7,9 +7,9 @@ import (
 	"regexp"
 )
 
+var invalidPromCharRegex = regexp.MustCompile(`[^a-zA-Z0-9:_]+`)
+
 // Prometheus metric names must contain only chars [a-zA-Z0-9:_]
 func CanonicalizeMetricName(metric string) string {
-	invalidPromCharRegex := regexp.MustCompile(`[^a-zA-Z0-9:_]+`)
 	return invalidPromCharRegex.ReplaceAllString(metric, "_")
-
 }
