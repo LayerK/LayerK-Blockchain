@@ -126,6 +126,27 @@ func TestSlices(t *testing.T) {
 	assert_eq(SliceWithRunoff(data, 7, 8), []uint8{})
 }
 
+func TestConcatByteSlices(t *testing.T) {
+	assert_eq := func(left, right []uint8) {
+		t.Helper()
+		if !bytes.Equal(left, right) {
+			Fail(t, common.Bytes2Hex(left), " ", common.Bytes2Hex(right))
+		}
+	}
+
+	assert_eq(ConcatByteSlices(), []uint8{})
+	assert_eq(ConcatByteSlices(nil, []uint8{}, []uint8{1}), []uint8{1})
+
+	first := []uint8{1, 2}
+	second := []uint8{3}
+	got := ConcatByteSlices(first, second, []uint8{}, []uint8{4, 5})
+	assert_eq(got, []uint8{1, 2, 3, 4, 5})
+
+	first[0] = 9
+	second[0] = 8
+	assert_eq(got, []uint8{1, 2, 3, 4, 5})
+}
+
 func testMinMaxSignedValues[T Signed](t *testing.T, min T, max T) {
 	gotMin := MinSignedValue[T]()
 	if gotMin != min {
