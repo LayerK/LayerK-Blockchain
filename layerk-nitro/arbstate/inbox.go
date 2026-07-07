@@ -48,6 +48,17 @@ const MaxDecompressedLen int = 1024 * 1024 * 16 // 16 MiB
 const maxZeroheavyDecompressedLen = 101*MaxDecompressedLen/100 + 64
 const MaxSegmentsPerSequencerMessage = 100 * 1024
 
+func readSequencerPayloadWithLimit(rd io.Reader, maxLen int) ([]byte, error) {
+	payload, err := io.ReadAll(io.LimitReader(rd, int64(maxLen)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) > maxLen {
+		return nil, fmt.Errorf("decoded sequencer payload exceeds max length %d", maxLen)
+	}
+	return payload, nil
+}
+
 func ParseSequencerMessage(ctx context.Context, batchNum uint64, batchBlockHash common.Hash, data []byte, dapReaders []daprovider.Reader, keysetValidationMode daprovider.KeysetValidationMode) (*SequencerMessage, error) {
 	if len(data) < 40 {
 		return nil, errors.New("sequencer message missing L1 header")
@@ -115,7 +126,7 @@ func ParseSequencerMessage(ctx context.Context, batchNum uint64, batchBlockHash 
 
 	// Stage 2: If enabled, decode the zero heavy payload (saves gas based on calldata charging).
 	if len(payload) > 0 && daprovider.IsZeroheavyEncodedHeaderByte(payload[0]) {
-		pl, err := io.ReadAll(io.LimitReader(zeroheavy.NewZeroheavyDecoder(bytes.NewReader(payload[1:])), int64(maxZeroheavyDecompressedLen)))
+		pl, err := readSequencerPayloadWithLimit(zeroheavy.NewZeroheavyDecoder(bytes.NewReader(payload[1:])), maxZeroheavyDecompressedLen)
 		if err != nil {
 			log.Warn("error reading from zeroheavy decoder", "err", err)
 			return parsedMsg, nil
