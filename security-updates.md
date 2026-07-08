@@ -24,12 +24,12 @@ Prepared for the LayerK Blockchain mono-repo to highlight near-term security wor
   - Before enabling the allow list in production, migrate any existing EOA entries that actually operate through a forwarding contract, such as multisig or account abstraction, onto their contract addresses.
   - Update integrator docs so they know the allow list is keyed on `msg.sender`; contracts must be listed explicitly.
 
-## 4. Deprecated address monitors need a product decision
-- **Status:** The monitoring utilities under `layerk-api` are in the deprecated subtree and were not changed in this maintenance pass.
-- **Risk:** If those monitors are still used operationally, they stream new blocks immediately and alert through stdout without confirmation depth, durable storage, authenticated delivery, or RPC failover.
+## 4. Deprecated address monitors partially hardened
+- **Status:** The monitoring utilities under `layerk-api` remain in the deprecated subtree, but the maintained implementations now use configurable confirmation depth and bounded queues. The Go monitor also caps successful JSON-RPC response bodies with `MAX_RPC_RESPONSE_BYTES`, and the JavaScript monitor drains queued blocks without repeated array shifts.
+- **Risk:** If those monitors are still used operationally, they still alert through stdout without durable storage, authenticated delivery, or RPC failover.
 - **Follow-up actions:**
   - Confirm whether the deprecated monitors are still deployed anywhere.
-  - If active, move maintained monitor code out of `layerk-api` and add configurable confirmation depth, replay protection, signed alerts, and RPC failover.
+  - If active, move maintained monitor code out of `layerk-api` and add durable replay state, signed alerts, and RPC failover.
 
 ## 5. Merkle tree deserialization hardened (landed)
 - **Status:** `NewMerkleTreeFromReader` now reads the serialized node-type byte with `io.ReadFull` instead of a single `Read` call, and the Merkle accumulator tests cover readers that temporarily report no progress.

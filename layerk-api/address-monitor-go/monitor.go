@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -22,6 +23,7 @@ const defaultMinConfirmations = 3
 const defaultPollInterval = 5 * time.Second
 const defaultRequestTimeout = 10 * time.Second
 const defaultMaxBlocksPerPoll = 128
+const defaultMaxRPCResponseBytes = 32 * 1024 * 1024
 
 var addressRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
 
@@ -35,6 +37,7 @@ var minConfirmations = loadNonNegativeIntEnv("MIN_CONFIRMATIONS", defaultMinConf
 var pollInterval = loadDurationEnvMillis("POLL_INTERVAL_MS", defaultPollInterval)
 var requestTimeout = loadDurationEnvMillis("REQUEST_TIMEOUT_MS", defaultRequestTimeout)
 var maxBlocksPerPoll = loadPositiveIntEnv("MAX_BLOCKS_PER_POLL", defaultMaxBlocksPerPoll)
+var maxRPCResponseBytes = loadPositiveIntEnv("MAX_RPC_RESPONSE_BYTES", defaultMaxRPCResponseBytes)
 
 var httpClient = &http.Client{
 	Timeout: requestTimeout,
@@ -213,10 +216,14 @@ func makeRPCRequest(ctx context.Context, method string, params []interface{}, re
 		return fmt.Errorf("unexpected RPC status code: %d", resp.StatusCode)
 	}
 
+	body, err := readLimitedRPCResponse(resp.Body)
+	if err != nil {
+		return err
+	}
+
 	// Decode the JSON response
 	var response rpcResponse
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	if err != nil {
+	if err := json.Unmarshal(body, &response); err != nil {
 		return err
 	}
 
@@ -238,6 +245,27 @@ func makeRPCRequest(ctx context.Context, method string, params []interface{}, re
 	}
 
 	return nil
+}
+
+func readLimitedRPCResponse(rd io.Reader) ([]byte, error) {
+	limit := int64(maxRPCResponseBytes)
+	body, err := io.ReadAll(io.LimitReader(rd, limit))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) < limit {
+		return body, nil
+	}
+
+	var extra [1]byte
+	n, err := rd.Read(extra[:])
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	if n > 0 {
+		return nil, fmt.Errorf("RPC response exceeds limit of %d bytes", maxRPCResponseBytes)
+	}
+	return body, nil
 }
 
 // Function to check if an address is in the monitoring list

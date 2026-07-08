@@ -156,8 +156,19 @@ async function checkBlock(blockNumber) {
 }
 
 const blockQueue = [];
+let blockQueueHead = 0;
 const queuedBlocks = new Set();
 let isProcessingQueue = false;
+
+function pendingBlockCount() {
+  return blockQueue.length - blockQueueHead;
+}
+
+function clearBlockQueue() {
+  blockQueue.length = 0;
+  blockQueueHead = 0;
+  queuedBlocks.clear();
+}
 
 function enqueueFinalizedBlocks(headBlockNumber) {
   const latestFinalizedBlock = headBlockNumber - MIN_CONFIRMATIONS;
@@ -165,7 +176,7 @@ function enqueueFinalizedBlocks(headBlockNumber) {
     return;
   }
 
-  if (lastQueuedFinalizedBlock === 0 && lastProcessedBlockNumber === null && blockQueue.length === 0) {
+  if (lastQueuedFinalizedBlock === 0 && lastProcessedBlockNumber === null && pendingBlockCount() === 0) {
     lastQueuedFinalizedBlock = latestFinalizedBlock;
     return;
   }
@@ -174,8 +185,7 @@ function enqueueFinalizedBlocks(headBlockNumber) {
   const blocksToQueue = latestFinalizedBlock - startBlock + 1;
   if (blocksToQueue > MAX_BLOCK_QUEUE) {
     startBlock = latestFinalizedBlock - MAX_BLOCK_QUEUE + 1;
-    blockQueue.length = 0;
-    queuedBlocks.clear();
+    clearBlockQueue();
     console.warn(
       `Backlog detected (${blocksToQueue} finalized blocks). Only queueing the latest ${MAX_BLOCK_QUEUE} finalized blocks.`
     );
@@ -195,8 +205,9 @@ async function drainQueue() {
   isProcessingQueue = true;
 
   try {
-    while (blockQueue.length > 0) {
-      const blockNumber = blockQueue.shift();
+    while (blockQueueHead < blockQueue.length) {
+      const blockNumber = blockQueue[blockQueueHead];
+      blockQueueHead += 1;
       queuedBlocks.delete(blockNumber);
       try {
         await checkBlock(blockNumber);
@@ -205,6 +216,10 @@ async function drainQueue() {
       }
     }
   } finally {
+    if (blockQueueHead > 0) {
+      blockQueue.splice(0, blockQueueHead);
+      blockQueueHead = 0;
+    }
     isProcessingQueue = false;
   }
 }
