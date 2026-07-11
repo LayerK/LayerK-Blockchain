@@ -355,7 +355,11 @@ export const initUpgrades = (
     console.log(`Updating ${contractsToUpdate.length} contracts`)
     // TODO: explicitly check for storage layout clashes
 
-    contractsToUpdate.sort(a => (a === ContractNames.SequencerInbox ? -1 : 1))
+    contractsToUpdate.sort((a, b) => {
+      if (a === ContractNames.SequencerInbox) return -1
+      if (b === ContractNames.SequencerInbox) return 1
+      return 0
+    })
 
     for (const contractName of contractsToUpdate) {
       const queuedUpdateData = queuedUpdatesData[contractName] as QueuedUpdate

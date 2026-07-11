@@ -19,9 +19,21 @@ task("compareBytecode", "Compares deployed bytecode with local builds")
         const artifactPaths = await hre.artifacts.getArtifactPaths();
         const localCodeHashes = new Map<string, string[]>();
         for (const artifactPath of artifactPaths) {
-            const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+            let artifact: { contractName?: string; deployedBytecode?: string };
+            try {
+                artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+            } catch {
+                console.log(`Skipping unreadable artifact ${artifactPath}`);
+                continue;
+            }
+
             const deployedBytecode = artifact.deployedBytecode;
-            if (typeof deployedBytecode !== "string" || deployedBytecode.length <= 2) {
+            if (
+                typeof deployedBytecode !== "string" ||
+                deployedBytecode.length <= 2 ||
+                typeof artifact.contractName !== "string" ||
+                artifact.contractName.length === 0
+            ) {
                 continue;
             }
             const localCodeHash = ethers.utils.keccak256(deployedBytecode);
@@ -35,6 +47,7 @@ task("compareBytecode", "Compares deployed bytecode with local builds")
 
         let cachedCompilerVersions: string[] | undefined;
         let cachedLibraries: Record<string, string> | undefined;
+        const seenAddresses = new Set<string>();
 
         for (const contractAddr of addresses) {
             const trimmed = contractAddr.trim();
@@ -42,10 +55,23 @@ task("compareBytecode", "Compares deployed bytecode with local builds")
                 continue;
             }
 
+            let normalizedAddress: string;
+            try {
+                normalizedAddress = ethers.utils.getAddress(trimmed);
+            } catch {
+                console.log(`Skipping invalid address ${trimmed}`);
+                continue;
+            }
+
+            if (seenAddresses.has(normalizedAddress)) {
+                continue;
+            }
+            seenAddresses.add(normalizedAddress);
+
             // Fetch deployed contract bytecode
-            const deployedBytecode = await hre.ethers.provider.getCode(trimmed);
+            const deployedBytecode = await hre.ethers.provider.getCode(normalizedAddress);
             if (deployedBytecode === "0x") {
-                console.log(`No bytecode found at address ${trimmed}`);
+                console.log(`No bytecode found at address ${normalizedAddress}`);
                 continue;
             }
 
@@ -53,14 +79,14 @@ task("compareBytecode", "Compares deployed bytecode with local builds")
             const matches = localCodeHashes.get(deployedCodeHash);
             if (matches && matches.length > 0) {
                 console.log(
-                    `Contract Address ${trimmed} matches with ${matches.join(", ")}`
+                    `Contract Address ${normalizedAddress} matches with ${matches.join(", ")}`
                 );
                 continue;
             }
 
             if (strict && !allowUnlinkedLibs) {
                 console.log(
-                    `Strict mode: no exact bytecode match found for ${trimmed}`
+                    `Strict mode: no exact bytecode match found for ${normalizedAddress}`
                 );
                 continue;
             }
@@ -83,10 +109,10 @@ task("compareBytecode", "Compares deployed bytecode with local builds")
                     libraries: cachedLibraries,
                 })
                 console.log(
-                    `Contract Address ${trimmed} matches with ${info.contractName} without checking constructor arguments`
+                    `Contract Address ${normalizedAddress} matches with ${info.contractName} without checking constructor arguments`
                 );
             } catch (error) {
-                console.log(`No matching contract found for address ${trimmed}`);
+                console.log(`No matching contract found for address ${normalizedAddress}`);
             }
         }
     });
